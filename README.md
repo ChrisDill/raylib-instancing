@@ -2,7 +2,7 @@
 
 Experimenting with instanced rendering support for raylib.
 
-Currently includes the raylib src as modifications to [rlgl.h](raylib/src/rlgl.h) are required for instancing support.
+Currently includes the raylib src as modifications to [rlgl.h](src/raylib/src/rlgl.h) are required for instancing support.
 
 ## Examples
 
@@ -12,6 +12,6 @@ Currently includes the raylib src as modifications to [rlgl.h](raylib/src/rlgl.h
 [textures_bunnymark_instanced](src/textures_bunnymark_instanced.c)
 ![textures_bunnymark_instanced](screenshots/textures_bunnymark_instanced.png)
 
-# License
+## License
 
-See [LICENSE](LICENSE.md) for details.
+See [LICENSE](LICENSE) for details.
