@@ -13,14 +13,9 @@ find build -type f -executable -delete
 make -C $RAYLIB_DIR/src
 
 # Build instancing examples
-cc -o build/asteroids_instanced src/asteroids_instanced.c $FLAGS $INCLUDES $LIBRARIES
-
-cc -o build/particles_instanced src/particles_instanced.c $FLAGS $INCLUDES $LIBRARIES
-
-cc -o build/textures_bunnymark_instanced src/textures_bunnymark_instanced.c $FLAGS $INCLUDES $LIBRARIES
-
-cc -o build/quads_instanced src/quads_instanced.c $FLAGS $INCLUDES $LIBRARIES
-
-cc -o build/test_instanced_2d src/test_instanced_2d.c $FLAGS $INCLUDES $LIBRARIES
-
-cc -o build/test_instanced_3d src/test_instanced_3d.c $FLAGS $INCLUDES $LIBRARIES
+cc -o build/asteroids_instanced src/instancing/asteroids_instanced.c $FLAGS $INCLUDES $LIBRARIES
+cc -o build/particles_instanced src/instancing/particles_instanced.c $FLAGS $INCLUDES $LIBRARIES
+cc -o build/textures_bunnymark_instanced src/instancing/textures_bunnymark_instanced.c $FLAGS $INCLUDES $LIBRARIES
+cc -o build/quads_instanced src/instancing/quads_instanced.c $FLAGS $INCLUDES $LIBRARIES
+cc -o build/test_instanced_2d src/instancing/test_instanced_2d.c $FLAGS $INCLUDES $LIBRARIES
+cc -o build/test_instanced_3d src/instancing/test_instanced_3d.c $FLAGS $INCLUDES $LIBRARIES
