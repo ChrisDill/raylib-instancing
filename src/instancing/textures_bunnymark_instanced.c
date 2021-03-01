@@ -17,7 +17,7 @@
 #include <stddef.h>
 #include <stdlib.h> // Required for: malloc(), free()
 
-#define MAX_BUNNIES 500000 // 50K bunnies limit
+#define MAX_BUNNIES 500000 // 500K bunnies limit with instancing!
 
 // This is the maximum amount of elements (quads) per batch
 // NOTE: This value is defined in [rlgl] module and can be changed there
@@ -36,6 +36,7 @@ int main(void)
     const int screenWidth = 800;
     const int screenHeight = 450;
 
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT);
     InitWindow(screenWidth, screenHeight, "raylib [textures] example - bunnymark instanced");
 
     // Load bunny texture
@@ -158,7 +159,7 @@ int main(void)
             }
         }
 
-        DrawRectangle(0, 0, screenWidth, 40, BLACK);
+        DrawRectangle(0, 0, GetScreenWidth(), 40, BLACK);
         DrawText(FormatText("bunnies: %i", bunniesCount), 120, 10, 20, GREEN);
 
         if (!drawInstanced)

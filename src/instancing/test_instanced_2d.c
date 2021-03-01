@@ -30,7 +30,7 @@ typedef enum InstanceCommand {
 
 void DrawCommand(InstanceCommand command, Texture2D texture, Color color)
 {
-    Rectangle frameRec = { 0.0f, 0.0f, (float)texture.width / 6, (float)texture.height };
+    // Rectangle frameRec = { 0.0f, 0.0f, (float)texture.width / 6, (float)texture.height };
 
     switch (command)
     {
@@ -48,7 +48,7 @@ void DrawCommand(InstanceCommand command, Texture2D texture, Color color)
             break;
         case INSTANCE_RECTANGLE_LINE:
             // DrawRectangleLines(0, 0, 50, 50, color);
-            DrawRectangleLinesEx((Rectangle) { 0, 0, 50, 50 }, 7, color);
+            DrawRectangleLinesEx((Rectangle) { 0, 0, 50, 50 }, 3, color);
             break;
         case INSTANCE_CIRCLE:
             DrawCircle(25, 25, 25, color);
@@ -60,7 +60,8 @@ void DrawCommand(InstanceCommand command, Texture2D texture, Color color)
             DrawText("Text!", 0, 0, 20, color);
             break;
         case INSTANCE_TEXTURE:
-            DrawTexturePro(texture, frameRec, (Rectangle) { 0, 0, 50, 50 }, Vector2Zero(), 0, WHITE);
+            DrawTexture(texture, 0, 0, WHITE);
+            // DrawTexturePro(texture, frameRec, (Rectangle) { 0, 0, 50, 50 }, Vector2Zero(), 0, WHITE);
             break;
         default:
             break;
@@ -77,7 +78,7 @@ int main(void)
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(screenWidth, screenHeight, "raylib [others] example - 2d instancing testbed");
 
-    Texture2D texture = LoadTexture("resources/textures/scarfy.png");
+    Texture2D texture = LoadTexture("resources/images/wabbit_alpha.png");
     Shader instanceShader = LoadShader("resources/shaders/test_instanced.vs", "resources/shaders/test_instanced.fs");
 
     RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
