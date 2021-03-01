@@ -6,11 +6,11 @@ Currently includes the raylib src as modifications to [rlgl.h](src/raylib/src/rl
 
 ## Examples
 
-[asteroids_instanced](src/asteroids_instanced.c)
-![asteroids_instanced](screenshots/asteroids_instanced.png)
+[asteroids_instanced](src/instancing/asteroids_instanced.c)
+![asteroids_instanced](src/instancing/screenshots/asteroids_instanced.png)
 
-[textures_bunnymark_instanced](src/textures_bunnymark_instanced.c)
-![textures_bunnymark_instanced](screenshots/textures_bunnymark_instanced.png)
+[textures_bunnymark_instanced](src/instancing/textures_bunnymark_instanced.c)
+![textures_bunnymark_instanced](src/instancing/screenshots/textures_bunnymark_instanced.png)
 
 ## License
 

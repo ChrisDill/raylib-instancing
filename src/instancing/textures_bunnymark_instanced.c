@@ -39,7 +39,7 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "raylib [textures] example - bunnymark instanced");
 
     // Load bunny texture
-    Texture2D texBunny = LoadTexture("resources/images/wabbit_alpha.png");   
+    Texture2D texBunny = LoadTexture("resources/images/wabbit_alpha.png");
 
     Shader shader = LoadShader("resources/shaders/bunnymark_instanced.vs", "resources/shaders/bunnymark_instanced.fs");
 

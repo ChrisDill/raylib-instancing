@@ -15,7 +15,7 @@ uniform mat4 mvp;
 out vec2 fragTexCoord;
 out vec4 fragColor;
 
-// NOTE: Add here your custom variables 
+// NOTE: Add here your custom variables
 
 void main()
 {
@@ -23,7 +23,7 @@ void main()
     fragTexCoord = vertexTexCoord;
     // fragColor = vertexColor;
     fragColor = bunnyColor;
-    
+
     vec3 position = vertexPosition + vec3(bunnyPosition, 0.0);
 
     // Calculate final vertex position
