@@ -894,7 +894,6 @@ typedef struct rlglData {
         int framebufferHeight;              // Default framebuffer height
 
         int instanceCount;
-        bool drawInstanced;
 
     } State;            // Renderer state
     struct {
@@ -985,15 +984,12 @@ void BeginModeInstanced(int instanceCount)
 {
     // Draw any existing comamnds so we can start using instancing
     rlglDraw();
-
     RLGL.State.instanceCount = instanceCount;
-    RLGL.State.drawInstanced = true;
 }
 
 void EndModeInstanced()
 {
-    RLGL.State.instanceCount = 0;
-    RLGL.State.drawInstanced = false;
+    RLGL.State.instanceCount = 1;
 }
 
 //----------------------------------------------------------------------------------
@@ -1857,6 +1853,8 @@ void rlglInit(int width, int height)
 
     TRACELOG(LOG_INFO, "RLGL: Default state initialized successfully");
 #endif
+
+    RLGL.State.instanceCount = 1;
 
     // Init state: Color/Depth buffers clear
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);                   // Set clear color (black)
@@ -4549,7 +4547,7 @@ static void DrawRenderBatch(RenderBatch *batch)
                 else
                 {
 #if defined(GRAPHICS_API_OPENGL_33)
-                    if (RLGL.State.drawInstanced)
+                    if (RLGL.State.instanceCount > 1)
                     {
                         glDrawElementsInstanced(GL_TRIANGLES, batch->draws[i].vertexCount/4*6, GL_UNSIGNED_INT, (GLvoid *)(sizeof(GLuint)*vertexOffset/4*6), RLGL.State.instanceCount);
                     }

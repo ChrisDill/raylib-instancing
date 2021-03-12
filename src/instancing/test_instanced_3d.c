@@ -149,7 +149,6 @@ int main(void)
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
-
         ClearBackground(BLACK);
 
         BeginMode3D(camera);

@@ -109,7 +109,6 @@ int main(void)
         // Draw
         //--------------------------------------------------------------------------------------
         BeginDrawing();
-
         ClearBackground((Color) { 26, 26, 26, 255 });
 
         if (drawInstanced)

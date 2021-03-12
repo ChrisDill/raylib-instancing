@@ -89,7 +89,7 @@ int main(void)
     unsigned int instanceCount = 200;
     Matrix* modelMatrices = (Matrix*)RL_CALLOC(instanceCount, sizeof(Matrix));
 
-    bool drawInstanced = true;
+    bool drawInstanced = false;
 
     // 2D camera mode
     Camera2D camera = { 0 };

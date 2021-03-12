@@ -123,7 +123,7 @@ int main(void)
         glBindVertexArray(0);
     }
 
-    bool drawInstanced = true;
+    bool drawInstanced = false;
     bool paused = false;
 
     // Define the camera to look into our 3d world
@@ -185,7 +185,6 @@ int main(void)
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
-
         ClearBackground((Color) { 26, 26, 26, 255 });
 
         BeginMode3D(camera);
