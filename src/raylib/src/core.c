@@ -80,7 +80,10 @@
 *       for linkage
 *
 *   #define SUPPORT_DATA_STORAGE
-*       Support saving binary data automatically to a generated storage.data file. This file is managed internally.
+*       Support saving binary data automatically to a generated storage.data file. This file is managed internally
+*
+*   #define SUPPORT_VR_SIMULATOR
+*       Support VR simulation functionality (stereo rendering)
 *
 *   DEPENDENCIES:
 *       rglfw    - Manage graphic device, OpenGL context and inputs on PLATFORM_DESKTOP (Windows, Linux, OSX. FreeBSD, OpenBSD, NetBSD, DragonFly)
@@ -197,20 +200,21 @@
         #define GLFW_EXPOSE_NATIVE_WIN32
         #include "GLFW/glfw3native.h"       // WARNING: It requires customization to avoid windows.h inclusion!
 
-        #if !defined(SUPPORT_BUSY_WAIT_LOOP)
+        #if defined(SUPPORT_WINMM_HIGHRES_TIMER) && !defined(SUPPORT_BUSY_WAIT_LOOP)
             // NOTE: Those functions require linking with winmm library
             unsigned int __stdcall timeBeginPeriod(unsigned int uPeriod);
             unsigned int __stdcall timeEndPeriod(unsigned int uPeriod);
         #endif
-
-    #elif defined(__linux__)
+    #endif
+    #if defined(__linux__) || defined(__FreeBSD__)
         #include <sys/time.h>               // Required for: timespec, nanosleep(), select() - POSIX
 
         //#define GLFW_EXPOSE_NATIVE_X11      // WARNING: Exposing Xlib.h > X.h results in dup symbols for Font type
         //#define GLFW_EXPOSE_NATIVE_WAYLAND
         //#define GLFW_EXPOSE_NATIVE_MIR
         #include "GLFW/glfw3native.h"       // Required for: glfwGetX11Window()
-    #elif defined(__APPLE__)
+    #endif
+    #if defined(__APPLE__)
         #include <unistd.h>                 // Required for: usleep()
 
         //#define GLFW_EXPOSE_NATIVE_COCOA    // WARNING: Fails due to type redefinition
@@ -472,6 +476,15 @@ typedef struct CoreData {
         unsigned long long base;            // Base time measure for hi-res timer
 #endif
     } Time;
+#if defined(SUPPORT_VR_SIMULATOR)
+    struct {
+        VrStereoConfig config;              // VR stereo configuration for simulator
+        unsigned int stereoFboId;           // VR stereo rendering framebuffer id
+        unsigned int stereoTexId;           // VR stereo color texture (attached to framebuffer)
+        bool simulatorReady;                // VR simulator ready flag
+        bool stereoRender;                  // VR stereo rendering enabled/disabled flag
+    } Vr;               // VR simulator data
+#endif  // SUPPORT_VR_SIMULATOR
 } CoreData;
 
 //----------------------------------------------------------------------------------
@@ -574,7 +587,7 @@ static int FindNearestConnectorMode(const drmModeConnector *connector, uint widt
 #endif  // PLATFORM_RPI || PLATFORM_DRM
 
 #if defined(_WIN32)
-    // NOTE: We include Sleep() function signature here to avoid windows.h inclusion
+    // NOTE: We include Sleep() function signature here to avoid windows.h inclusion (kernel32 lib)
     void __stdcall Sleep(unsigned long msTimeout);      // Required for Wait()
 #endif
 
@@ -747,13 +760,13 @@ void InitWindow(int width, int height, const char *title)
     LoadFontDefault();
     Rectangle rec = GetFontDefault().recs[95];
     // NOTE: We setup a 1px padding on char rectangle to avoid pixel bleeding on MSAA filtering
-    SetShapesTexture(GetFontDefault().texture, (Rectangle){ rec.x + 1, rec.y + 1, rec.width - 2, rec.height - 2 });
+    rlSetShapesTexture(GetFontDefault().texture, (Rectangle){ rec.x + 1, rec.y + 1, rec.width - 2, rec.height - 2 });
 #endif
 #if defined(PLATFORM_DESKTOP)
     if ((CORE.Window.flags & FLAG_WINDOW_HIGHDPI) > 0)
     {
         // Set default font texture filter for HighDPI (blurry)
-        SetTextureFilter(GetFontDefault().texture, FILTER_BILINEAR);
+        SetTextureFilter(GetFontDefault().texture, TEXTURE_FILTER_BILINEAR);
     }
 #endif
 
@@ -818,7 +831,7 @@ void CloseWindow(void)
     glfwTerminate();
 #endif
 
-#if !defined(SUPPORT_BUSY_WAIT_LOOP) && defined(_WIN32) && !defined(PLATFORM_UWP)
+#if defined(_WIN32) && defined(SUPPORT_WINMM_HIGHRES_TIMER) && !defined(SUPPORT_BUSY_WAIT_LOOP) && !defined(PLATFORM_UWP)
     timeEndPeriod(1);           // Restore time period
 #endif
 
@@ -1033,34 +1046,40 @@ void ToggleFullscreen(void)
         // Store previous window position (in case we exit fullscreen)
         glfwGetWindowPos(CORE.Window.handle, &CORE.Window.position.x, &CORE.Window.position.y);
 
-        GLFWmonitor *monitor = glfwGetWindowMonitor(CORE.Window.handle);
+        int monitorCount = 0;
+        GLFWmonitor** monitors = glfwGetMonitors(&monitorCount);
+
+        int monitorIndex = GetCurrentMonitor();
+        // use GetCurrentMonitor so we correctly get the display the window is on
+        GLFWmonitor* monitor = monitorIndex < monitorCount ?  monitors[monitorIndex] : NULL;
+
         if (!monitor)
         {
             TRACELOG(LOG_WARNING, "GLFW: Failed to get monitor");
-            glfwSetWindowSizeCallback(CORE.Window.handle, NULL);
-            glfwSetWindowMonitor(CORE.Window.handle, glfwGetPrimaryMonitor(), 0, 0, CORE.Window.screen.width, CORE.Window.screen.height, GLFW_DONT_CARE);
-            glfwSetWindowSizeCallback(CORE.Window.handle, WindowSizeCallback);
+
+            CORE.Window.fullscreen = false;          // Toggle fullscreen flag
+            CORE.Window.flags &= ~FLAG_FULLSCREEN_MODE;
+
+            glfwSetWindowMonitor(CORE.Window.handle, NULL, 0, 0, CORE.Window.screen.width, CORE.Window.screen.height, GLFW_DONT_CARE);
             return;
         }
 
-        const GLFWvidmode *mode = glfwGetVideoMode(monitor);
-        glfwSetWindowSizeCallback(CORE.Window.handle, NULL);
-        glfwSetWindowMonitor(CORE.Window.handle, monitor, 0, 0, CORE.Window.screen.width, CORE.Window.screen.height, GLFW_DONT_CARE);
-        glfwSetWindowSizeCallback(CORE.Window.handle, WindowSizeCallback);
+        CORE.Window.fullscreen = true;          // Toggle fullscreen flag
+        CORE.Window.flags |= FLAG_FULLSCREEN_MODE;
 
-        // Try to enable GPU V-Sync, so frames are limited to screen refresh rate (60Hz -> 60 FPS)
-        // NOTE: V-Sync can be enabled by graphic driver configuration
-        if (CORE.Window.flags & FLAG_VSYNC_HINT) glfwSwapInterval(1);
+        glfwSetWindowMonitor(CORE.Window.handle, monitor, 0, 0, CORE.Window.screen.width, CORE.Window.screen.height, GLFW_DONT_CARE);
     }
     else
     {
-        glfwSetWindowSizeCallback(CORE.Window.handle, NULL);
+        CORE.Window.fullscreen = false;          // Toggle fullscreen flag
+        CORE.Window.flags &= ~FLAG_FULLSCREEN_MODE;
+
         glfwSetWindowMonitor(CORE.Window.handle, NULL, CORE.Window.position.x, CORE.Window.position.y, CORE.Window.screen.width, CORE.Window.screen.height, GLFW_DONT_CARE);
-        glfwSetWindowSizeCallback(CORE.Window.handle, WindowSizeCallback);
     }
 
-    CORE.Window.fullscreen = !CORE.Window.fullscreen;          // Toggle fullscreen flag
-    CORE.Window.flags ^= FLAG_FULLSCREEN_MODE;
+    // Try to enable GPU V-Sync, so frames are limited to screen refresh rate (60Hz -> 60 FPS)
+    // NOTE: V-Sync can be enabled by graphic driver configuration
+    if (CORE.Window.flags & FLAG_VSYNC_HINT) glfwSwapInterval(1);
 
 #endif
 #if defined(PLATFORM_WEB)
@@ -1349,7 +1368,7 @@ void ClearWindowState(unsigned int flags)
 void SetWindowIcon(Image image)
 {
 #if defined(PLATFORM_DESKTOP)
-    if (image.format == UNCOMPRESSED_R8G8B8A8)
+    if (image.format == PIXELFORMAT_UNCOMPRESSED_R8G8B8A8)
     {
         GLFWimage icon[1] = { 0 };
 
@@ -1429,13 +1448,13 @@ void SetWindowSize(int width, int height)
 // Get current screen width
 int GetScreenWidth(void)
 {
-    return CORE.Window.screen.width;
+    return CORE.Window.currentFbo.width;
 }
 
 // Get current screen height
 int GetScreenHeight(void)
 {
-    return CORE.Window.screen.height;
+    return CORE.Window.currentFbo.height;
 }
 
 // Get native window handle
@@ -1444,18 +1463,20 @@ void *GetWindowHandle(void)
 #if defined(PLATFORM_DESKTOP) && defined(_WIN32)
     // NOTE: Returned handle is: void *HWND (windows.h)
     return glfwGetWin32Window(CORE.Window.handle);
-#elif defined(__linux__)
+#endif
+#if defined(__linux__)
     // NOTE: Returned handle is: unsigned long Window (X.h)
     // typedef unsigned long XID;
     // typedef XID Window;
     //unsigned long id = (unsigned long)glfwGetX11Window(window);
     return NULL;    // TODO: Find a way to return value... cast to void *?
-#elif defined(__APPLE__)
+#endif
+#if defined(__APPLE__)
     // NOTE: Returned handle is: (objc_object *)
     return NULL;    // TODO: return (void *)glfwGetCocoaWindow(window);
-#else
-    return NULL;
 #endif
+
+    return NULL;
 }
 
 // Get number of monitors
@@ -1816,7 +1837,7 @@ void EndDrawing(void)
     }
 #endif
 
-    rlglDraw();                     // Draw Buffers (Only OpenGL 3+ and ES2)
+    rlDrawRenderBatchActive();      // Update and draw internal render batch
 
 #if defined(SUPPORT_GIF_RECORDING)
     #define GIF_RECORD_FRAMERATE    10
@@ -1833,7 +1854,7 @@ void EndDrawing(void)
             unsigned char *screenData = rlReadScreenPixels(CORE.Window.screen.width, CORE.Window.screen.height);
             msf_gif_frame(&gifState, screenData, 10, 16, CORE.Window.screen.width*4);
 
-            RL_FREE(screenData);   // Free image data
+            RL_FREE(screenData);    // Free image data
         }
 
         if (((gifFramesCounter/15)%2) == 1)
@@ -1842,7 +1863,7 @@ void EndDrawing(void)
             DrawText("RECORDING", 50, CORE.Window.screen.height - 25, 10, MAROON);
         }
 
-        rlglDraw();                 // Draw RECORDING message
+        rlDrawRenderBatchActive();  // Update and draw internal render batch
     }
 #endif
 
@@ -1873,9 +1894,9 @@ void EndDrawing(void)
 // Initialize 2D mode with custom camera (2D)
 void BeginMode2D(Camera2D camera)
 {
-    rlglDraw();                         // Draw Buffers (Only OpenGL 3+ and ES2)
+    rlDrawRenderBatchActive();      // Update and draw internal render batch
 
-    rlLoadIdentity();                   // Reset current matrix (modelview)
+    rlLoadIdentity();               // Reset current matrix (modelview)
 
     // Apply 2d camera transformation to modelview
     rlMultMatrixf(MatrixToFloat(GetCameraMatrix2D(camera)));
@@ -1887,24 +1908,25 @@ void BeginMode2D(Camera2D camera)
 // Ends 2D mode with custom camera
 void EndMode2D(void)
 {
-    rlglDraw();                         // Draw Buffers (Only OpenGL 3+ and ES2)
+    rlDrawRenderBatchActive();      // Update and draw internal render batch
 
-    rlLoadIdentity();                   // Reset current matrix (modelview)
+    rlLoadIdentity();               // Reset current matrix (modelview)
     rlMultMatrixf(MatrixToFloat(CORE.Window.screenScale)); // Apply screen scaling if required
 }
 
 // Initializes 3D mode with custom camera (3D)
 void BeginMode3D(Camera3D camera)
 {
-    rlglDraw();                         // Draw Buffers (Only OpenGL 3+ and ES2)
+    rlDrawRenderBatchActive();      // Update and draw internal render batch
 
-    rlMatrixMode(RL_PROJECTION);        // Switch to projection matrix
-    rlPushMatrix();                     // Save previous matrix, which contains the settings for the 2d ortho projection
-    rlLoadIdentity();                   // Reset current matrix (projection)
+    rlMatrixMode(RL_PROJECTION);    // Switch to projection matrix
+    rlPushMatrix();                 // Save previous matrix, which contains the settings for the 2d ortho projection
+    rlLoadIdentity();               // Reset current matrix (projection)
 
     float aspect = (float)CORE.Window.currentFbo.width/(float)CORE.Window.currentFbo.height;
 
-    if (camera.type == CAMERA_PERSPECTIVE)
+    // NOTE: zNear and zFar values are important when computing depth buffer values
+    if (camera.projection == CAMERA_PERSPECTIVE)
     {
         // Setup perspective projection
         double top = RL_CULL_DISTANCE_NEAR*tan(camera.fovy*0.5*DEG2RAD);
@@ -1912,7 +1934,7 @@ void BeginMode3D(Camera3D camera)
 
         rlFrustum(-right, right, -top, top, RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
     }
-    else if (camera.type == CAMERA_ORTHOGRAPHIC)
+    else if (camera.projection == CAMERA_ORTHOGRAPHIC)
     {
         // Setup orthographic projection
         double top = camera.fovy/2.0;
@@ -1921,55 +1943,53 @@ void BeginMode3D(Camera3D camera)
         rlOrtho(-right, right, -top,top, RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
     }
 
-    // NOTE: zNear and zFar values are important when computing depth buffer values
-
-    rlMatrixMode(RL_MODELVIEW);         // Switch back to modelview matrix
-    rlLoadIdentity();                   // Reset current matrix (modelview)
+    rlMatrixMode(RL_MODELVIEW);     // Switch back to modelview matrix
+    rlLoadIdentity();               // Reset current matrix (modelview)
 
     // Setup Camera view
     Matrix matView = MatrixLookAt(camera.position, camera.target, camera.up);
     rlMultMatrixf(MatrixToFloat(matView));      // Multiply modelview matrix by view matrix (camera)
 
-    rlEnableDepthTest();                // Enable DEPTH_TEST for 3D
+    rlEnableDepthTest();            // Enable DEPTH_TEST for 3D
 }
 
 // Ends 3D mode and returns to default 2D orthographic mode
 void EndMode3D(void)
 {
-    rlglDraw();                         // Process internal buffers (update + draw)
+    rlDrawRenderBatchActive();      // Update and draw internal render batch
 
-    rlMatrixMode(RL_PROJECTION);        // Switch to projection matrix
-    rlPopMatrix();                      // Restore previous matrix (projection) from matrix stack
+    rlMatrixMode(RL_PROJECTION);    // Switch to projection matrix
+    rlPopMatrix();                  // Restore previous matrix (projection) from matrix stack
 
-    rlMatrixMode(RL_MODELVIEW);         // Switch back to modelview matrix
-    rlLoadIdentity();                   // Reset current matrix (modelview)
+    rlMatrixMode(RL_MODELVIEW);     // Switch back to modelview matrix
+    rlLoadIdentity();               // Reset current matrix (modelview)
 
     rlMultMatrixf(MatrixToFloat(CORE.Window.screenScale)); // Apply screen scaling if required
 
-    rlDisableDepthTest();               // Disable DEPTH_TEST for 2D
+    rlDisableDepthTest();           // Disable DEPTH_TEST for 2D
 }
 
 // Initializes render texture for drawing
 void BeginTextureMode(RenderTexture2D target)
 {
-    rlglDraw();                         // Draw Buffers (Only OpenGL 3+ and ES2)
+    rlDrawRenderBatchActive();      // Update and draw internal render batch
 
-    rlEnableFramebuffer(target.id);     // Enable render target
+    rlEnableFramebuffer(target.id); // Enable render target
 
     // Set viewport to framebuffer size
     rlViewport(0, 0, target.texture.width, target.texture.height);
 
-    rlMatrixMode(RL_PROJECTION);        // Switch to projection matrix
-    rlLoadIdentity();                   // Reset current matrix (projection)
+    rlMatrixMode(RL_PROJECTION);    // Switch to projection matrix
+    rlLoadIdentity();               // Reset current matrix (projection)
 
     // Set orthographic projection to current framebuffer size
     // NOTE: Configured top-left corner as (0, 0)
     rlOrtho(0, target.texture.width, target.texture.height, 0, 0.0f, 1.0f);
 
-    rlMatrixMode(RL_MODELVIEW);         // Switch back to modelview matrix
-    rlLoadIdentity();                   // Reset current matrix (modelview)
+    rlMatrixMode(RL_MODELVIEW);     // Switch back to modelview matrix
+    rlLoadIdentity();               // Reset current matrix (modelview)
 
-    //rlScalef(0.0f, -1.0f, 0.0f);      // Flip Y-drawing (?)
+    //rlScalef(0.0f, -1.0f, 0.0f);  // Flip Y-drawing (?)
 
     // Setup current width/height for proper aspect ratio
     // calculation when using BeginMode3D()
@@ -1980,23 +2000,297 @@ void BeginTextureMode(RenderTexture2D target)
 // Ends drawing to render texture
 void EndTextureMode(void)
 {
-    rlglDraw();                 // Draw Buffers (Only OpenGL 3+ and ES2)
+    rlDrawRenderBatchActive();      // Update and draw internal render batch
 
-    rlDisableFramebuffer();     // Disable render target (fbo)
+    rlDisableFramebuffer();         // Disable render target (fbo)
 
     // Set viewport to default framebuffer size
     SetupViewport(CORE.Window.render.width, CORE.Window.render.height);
 
-    // Reset current screen size
-    CORE.Window.currentFbo.width = GetScreenWidth();
-    CORE.Window.currentFbo.height = GetScreenHeight();
+    // Reset current fbo to screen size
+    CORE.Window.currentFbo.width = CORE.Window.screen.width;
+    CORE.Window.currentFbo.height = CORE.Window.screen.height;
 }
+
+// Load shader from files and bind default locations
+// NOTE: If shader string is NULL, using default vertex/fragment shaders
+Shader LoadShader(const char *vsFileName, const char *fsFileName)
+{
+    Shader shader = { 0 };
+    shader.locs = (int *)RL_CALLOC(MAX_SHADER_LOCATIONS, sizeof(int));
+
+    // NOTE: All locations must be reseted to -1 (no location)
+    for (int i = 0; i < MAX_SHADER_LOCATIONS; i++) shader.locs[i] = -1;
+
+    char *vShaderStr = NULL;
+    char *fShaderStr = NULL;
+
+    if (vsFileName != NULL) vShaderStr = LoadFileText(vsFileName);
+    if (fsFileName != NULL) fShaderStr = LoadFileText(fsFileName);
+
+    shader.id = rlLoadShaderCode(vShaderStr, fShaderStr);
+
+    if (vShaderStr != NULL) RL_FREE(vShaderStr);
+    if (fShaderStr != NULL) RL_FREE(fShaderStr);
+    
+    // After shader loading, we TRY to set default location names
+    if (shader.id > 0)
+    {
+        // Default shader attrib locations have been fixed before linking:
+        //          vertex position location    = 0
+        //          vertex texcoord location    = 1
+        //          vertex normal location      = 2
+        //          vertex color location       = 3
+        //          vertex tangent location     = 4
+        //          vertex texcoord2 location   = 5
+        
+        // NOTE: If any location is not found, loc point becomes -1
+
+        // Get handles to GLSL input attibute locations
+        shader.locs[SHADER_LOC_VERTEX_POSITION] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_POSITION);
+        shader.locs[SHADER_LOC_VERTEX_TEXCOORD01] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_TEXCOORD);
+        shader.locs[SHADER_LOC_VERTEX_TEXCOORD02] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_TEXCOORD2);
+        shader.locs[SHADER_LOC_VERTEX_NORMAL] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_NORMAL);
+        shader.locs[SHADER_LOC_VERTEX_TANGENT] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_TANGENT);
+        shader.locs[SHADER_LOC_VERTEX_COLOR] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_COLOR);
+
+        // Get handles to GLSL uniform locations (vertex shader)
+        shader.locs[SHADER_LOC_MATRIX_MVP]  = rlGetLocationUniform(shader.id, "mvp");
+        shader.locs[SHADER_LOC_MATRIX_PROJECTION]  = rlGetLocationUniform(shader.id, "projection");
+        shader.locs[SHADER_LOC_MATRIX_VIEW]  = rlGetLocationUniform(shader.id, "view");
+
+        // Get handles to GLSL uniform locations (fragment shader)
+        shader.locs[SHADER_LOC_COLOR_DIFFUSE] = rlGetLocationUniform(shader.id, "colDiffuse");
+        shader.locs[SHADER_LOC_MAP_DIFFUSE] = rlGetLocationUniform(shader.id, "texture0");
+        shader.locs[SHADER_LOC_MAP_SPECULAR] = rlGetLocationUniform(shader.id, "texture1");
+        shader.locs[SHADER_LOC_MAP_NORMAL] = rlGetLocationUniform(shader.id, "texture2");
+    }
+
+    return shader;
+}
+
+// Unload shader from GPU memory (VRAM)
+void UnloadShader(Shader shader)
+{
+    if (shader.id != rlGetShaderDefault().id)
+    {
+        rlUnloadShaderProgram(shader.id);
+        RL_FREE(shader.locs);
+    }
+}
+
+// Begin custom shader mode
+void BeginShaderMode(Shader shader)
+{
+    rlSetShaderActive(shader);
+}
+
+// End custom shader mode (returns to default shader)
+void EndShaderMode(void)
+{
+    BeginShaderMode(rlGetShaderDefault());
+}
+
+// Get shader uniform location
+int GetShaderLocation(Shader shader, const char *uniformName)
+{
+    return rlGetLocationUniform(shader.id, uniformName);
+}
+
+// Get shader attribute location
+int GetShaderLocationAttrib(Shader shader, const char *attribName)
+{
+    return rlGetLocationAttrib(shader.id, attribName);
+}
+
+// Set shader uniform value
+void SetShaderValue(Shader shader, int locIndex, const void *value, int uniformType)
+{
+    SetShaderValueV(shader, locIndex, value, uniformType, 1);
+}
+
+// Set shader uniform value vector
+void SetShaderValueV(Shader shader, int locIndex, const void *value, int uniformType, int count)
+{
+    rlEnableShader(shader.id);
+    rlSetUniform(locIndex, value, uniformType, count);
+    //rlDisableShader();      // Avoid reseting current shader program, in case other uniforms are set
+}
+
+// Set shader uniform value (matrix 4x4)
+void SetShaderValueMatrix(Shader shader, int locIndex, Matrix mat)
+{
+    rlEnableShader(shader.id);
+    rlSetUniformMatrix(locIndex, mat);
+    //rlDisableShader();
+}
+
+// Set shader uniform value for texture
+void SetShaderValueTexture(Shader shader, int locIndex, Texture2D texture)
+{
+    rlEnableShader(shader.id);
+    rlSetUniformSampler(locIndex, texture);
+    //rlDisableShader();
+}
+
+// Begin blending mode (alpha, additive, multiplied)
+// NOTE: Only 3 blending modes supported, default blend mode is alpha
+void BeginBlendMode(int mode)
+{
+    rlSetBlendMode(mode);
+}
+
+// End blending mode (reset to default: alpha blending)
+void EndBlendMode(void)
+{
+    rlSetBlendMode(BLEND_ALPHA);
+}
+
+#if defined(SUPPORT_VR_SIMULATOR)
+// Init VR simulator for selected device parameters
+void InitVrSimulator(VrDeviceInfo device)
+{
+#if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
+    // Reset CORE.Vr.config for a new values assignment
+    memset(&CORE.Vr.config, 0, sizeof(VrStereoConfig));
+
+    // Compute aspect ratio
+    float aspect = ((float)device.hResolution*0.5f)/(float)device.vResolution;
+
+    // Compute lens parameters
+    float lensShift = (device.hScreenSize*0.25f - device.lensSeparationDistance*0.5f)/device.hScreenSize;
+    CORE.Vr.config.leftLensCenter[0] = 0.25f + lensShift;
+    CORE.Vr.config.leftLensCenter[1] = 0.5f;
+    CORE.Vr.config.rightLensCenter[0] = 0.75f - lensShift;
+    CORE.Vr.config.rightLensCenter[1] = 0.5f;
+    CORE.Vr.config.leftScreenCenter[0] = 0.25f;
+    CORE.Vr.config.leftScreenCenter[1] = 0.5f;
+    CORE.Vr.config.rightScreenCenter[0] = 0.75f;
+    CORE.Vr.config.rightScreenCenter[1] = 0.5f;
+
+    // Compute distortion scale parameters
+    // NOTE: To get lens max radius, lensShift must be normalized to [-1..1]
+    float lensRadius = fabsf(-1.0f - 4.0f*lensShift);
+    float lensRadiusSq = lensRadius*lensRadius;
+    float distortionScale = device.lensDistortionValues[0] +
+                            device.lensDistortionValues[1]*lensRadiusSq +
+                            device.lensDistortionValues[2]*lensRadiusSq*lensRadiusSq +
+                            device.lensDistortionValues[3]*lensRadiusSq*lensRadiusSq*lensRadiusSq;
+
+    float normScreenWidth = 0.5f;
+    float normScreenHeight = 1.0f;
+    CORE.Vr.config.scaleIn[0] = 2.0f/normScreenWidth;
+    CORE.Vr.config.scaleIn[1] = 2.0f/normScreenHeight/aspect;
+    CORE.Vr.config.scale[0] = normScreenWidth*0.5f/distortionScale;
+    CORE.Vr.config.scale[1] = normScreenHeight*0.5f*aspect/distortionScale;
+
+    // Fovy is normally computed with: 2*atan2f(device.vScreenSize, 2*device.eyeToScreenDistance)
+    // ...but with lens distortion it is increased (see Oculus SDK Documentation)
+    //float fovy = 2.0f*atan2f(device.vScreenSize*0.5f*distortionScale, device.eyeToScreenDistance);     // Really need distortionScale?
+    float fovy = 2.0f*(float)atan2f(device.vScreenSize*0.5f, device.eyeToScreenDistance);
+
+    // Compute camera projection matrices
+    float projOffset = 4.0f*lensShift;      // Scaled to projection space coordinates [-1..1]
+    Matrix proj = MatrixPerspective(fovy, aspect, RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
+    rlSetMatrixProjectionStereo(MatrixMultiply(proj, MatrixTranslate(projOffset, 0.0f, 0.0f)), MatrixMultiply(proj, MatrixTranslate(-projOffset, 0.0f, 0.0f)));
+
+    // Compute camera transformation matrices
+    // NOTE: Camera movement might seem more natural if we model the head.
+    // Our axis of rotation is the base of our head, so we might want to add
+    // some y (base of head to eye level) and -z (center of head to eye protrusion) to the camera positions.
+    rlSetMatrixViewOffsetStereo(MatrixTranslate(-device.interpupillaryDistance*0.5f, 0.075f, 0.045f), MatrixTranslate(device.interpupillaryDistance*0.5f, 0.075f, 0.045f));
+
+    // Compute eyes Viewports
+    /*
+    CORE.Vr.config.eyeViewportRight[0] = 0;
+    CORE.Vr.config.eyeViewportRight[1] = 0;
+    CORE.Vr.config.eyeViewportRight[2] = device.hResolution/2;
+    CORE.Vr.config.eyeViewportRight[3] = device.vResolution;
+
+    CORE.Vr.config.eyeViewportLeft[0] = device.hResolution/2;
+    CORE.Vr.config.eyeViewportLeft[1] = 0;
+    CORE.Vr.config.eyeViewportLeft[2] = device.hResolution/2;
+    CORE.Vr.config.eyeViewportLeft[3] = device.vResolution;
+    */
+
+    CORE.Vr.simulatorReady = true;
+#else
+    TRACELOG(LOG_WARNING, "RLGL: VR Simulator not supported on OpenGL 1.1");
+#endif
+}
+
+// Update VR tracking (position and orientation) and camera
+// NOTE: Camera (position, target, up) gets update with head tracking information
+void UpdateVrTracking(Camera *camera)
+{
+    // TODO: Simulate 1st person camera system
+}
+
+// Close VR simulator for current device
+void CloseVrSimulator(void)
+{
+    CORE.Vr.simulatorReady = false;
+}
+
+// Get stereo rendering configuration parameters
+VrStereoConfig GetVrConfig(VrDeviceInfo device)
+{
+    VrStereoConfig config = { 0 };
+#if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
+    config = CORE.Vr.config;
+#endif
+    return config;
+}
+
+// Detect if VR simulator is running
+bool IsVrSimulatorReady(void)
+{
+    return CORE.Vr.simulatorReady;
+}
+
+// Begin VR drawing configuration
+void BeginVrDrawing(RenderTexture2D target)
+{
+#if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
+    if (CORE.Vr.simulatorReady)
+    {
+        rlEnableFramebuffer(target.id);     // Setup framebuffer for stereo rendering
+        //glEnable(GL_FRAMEBUFFER_SRGB);    // Enable SRGB framebuffer (only if required)
+
+        //rlViewport(0, 0, buffer.width, buffer.height); // Useful if rendering to separate framebuffers (every eye)
+        rlClearScreenBuffers();             // Clear current framebuffer
+
+        rlEnableStereoRender();
+    }
+#endif
+}
+
+// End VR drawing process (and desktop mirror)
+void EndVrDrawing(void)
+{
+#if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
+    if (CORE.Vr.simulatorReady)
+    {
+        rlDisableStereoRender();
+
+        rlDisableFramebuffer();         // Unbind current framebuffer
+
+        // Reset viewport and default projection-modelview matrices
+        rlViewport(0, 0, GetScreenWidth(), GetScreenHeight());
+        rlSetMatrixProjection(MatrixOrtho(0.0, GetScreenWidth(), GetScreenHeight(), 0.0, 0.0, 1.0));
+        rlSetMatrixModelview(MatrixIdentity());
+
+        rlDisableDepthTest();
+    }
+#endif
+}
+#endif          // SUPPORT_VR_SIMULATOR
 
 // Begin scissor mode (define screen area for following drawing)
 // NOTE: Scissor rec refers to bottom-left corner, we change it to upper-left
 void BeginScissorMode(int x, int y, int width, int height)
 {
-    rlglDraw(); // Force drawing elements
+    rlDrawRenderBatchActive();      // Update and draw internal render batch
 
     rlEnableScissorTest();
     rlScissor(x, CORE.Window.currentFbo.height - (y + height), width, height);
@@ -2005,7 +2299,7 @@ void BeginScissorMode(int x, int y, int width, int height)
 // End scissor mode
 void EndScissorMode(void)
 {
-    rlglDraw(); // Force drawing elements
+    rlDrawRenderBatchActive();      // Update and draw internal render batch
     rlDisableScissorTest();
 }
 
@@ -2028,12 +2322,12 @@ Ray GetMouseRay(Vector2 mouse, Camera camera)
 
     Matrix matProj = MatrixIdentity();
 
-    if (camera.type == CAMERA_PERSPECTIVE)
+    if (camera.projection == CAMERA_PERSPECTIVE)
     {
         // Calculate projection matrix from perspective
         matProj = MatrixPerspective(camera.fovy*DEG2RAD, ((double)GetScreenWidth()/(double)GetScreenHeight()), RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
     }
-    else if (camera.type == CAMERA_ORTHOGRAPHIC)
+    else if (camera.projection == CAMERA_ORTHOGRAPHIC)
     {
         float aspect = (float)CORE.Window.screen.width/(float)CORE.Window.screen.height;
         double top = camera.fovy/2.0;
@@ -2055,8 +2349,8 @@ Ray GetMouseRay(Vector2 mouse, Camera camera)
     // Calculate normalized direction vector
     Vector3 direction = Vector3Normalize(Vector3Subtract(farPoint, nearPoint));
 
-    if (camera.type == CAMERA_PERSPECTIVE) ray.position = camera.position;
-    else if (camera.type == CAMERA_ORTHOGRAPHIC) ray.position = cameraPlanePointerPos;
+    if (camera.projection == CAMERA_PERSPECTIVE) ray.position = camera.position;
+    else if (camera.projection == CAMERA_ORTHOGRAPHIC) ray.position = cameraPlanePointerPos;
 
     // Apply calculated vectors to ray
     ray.direction = direction;
@@ -2112,12 +2406,12 @@ Vector2 GetWorldToScreenEx(Vector3 position, Camera camera, int width, int heigh
     // Calculate projection matrix (from perspective instead of frustum
     Matrix matProj = MatrixIdentity();
 
-    if (camera.type == CAMERA_PERSPECTIVE)
+    if (camera.projection == CAMERA_PERSPECTIVE)
     {
         // Calculate projection matrix from perspective
         matProj = MatrixPerspective(camera.fovy * DEG2RAD, ((double)width/(double)height), RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
     }
-    else if (camera.type == CAMERA_ORTHOGRAPHIC)
+    else if (camera.projection == CAMERA_ORTHOGRAPHIC)
     {
         float aspect = (float)CORE.Window.screen.width/(float)CORE.Window.screen.height;
         double top = camera.fovy/2.0;
@@ -2249,7 +2543,7 @@ void SetConfigFlags(unsigned int flags)
 void TakeScreenshot(const char *fileName)
 {
     unsigned char *imgData = rlReadScreenPixels(CORE.Window.render.width, CORE.Window.render.height);
-    Image image = { imgData, CORE.Window.render.width, CORE.Window.render.height, 1, UNCOMPRESSED_R8G8B8A8 };
+    Image image = { imgData, CORE.Window.render.width, CORE.Window.render.height, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 };
 
     char path[512] = { 0 };
 #if defined(PLATFORM_ANDROID)
@@ -2322,7 +2616,7 @@ bool IsFileExtension(const char *fileName, const char *ext)
 
         for (int i = 0; i < extCount; i++)
         {
-            if (TextIsEqual(fileExtLower, TextToLower(checkExts[i] + 1)))
+            if (TextIsEqual(fileExtLower, TextToLower(checkExts[i])))
             {
                 result = true;
                 break;
@@ -2351,14 +2645,14 @@ bool DirectoryExists(const char *dirPath)
     return result;
 }
 
-// Get pointer to extension for a filename string
+// Get pointer to extension for a filename string (includes the dot: .png)
 const char *GetFileExtension(const char *fileName)
 {
     const char *dot = strrchr(fileName, '.');
 
     if (!dot || dot == fileName) return NULL;
 
-    return (dot + 1);
+    return dot;
 }
 
 // String pointer reverse break: returns right-most occurrence of charset in s
@@ -2704,7 +2998,7 @@ bool SaveStorageValue(unsigned int position, int value)
         dataPtr[position] = value;
 
         success = SaveFileData(path, fileData, dataSize);
-        RL_FREE(fileData);
+        UnloadFileData(fileData);
     }
 #endif
 
@@ -2716,6 +3010,7 @@ bool SaveStorageValue(unsigned int position, int value)
 int LoadStorageValue(unsigned int position)
 {
     int value = 0;
+
 #if defined(SUPPORT_DATA_STORAGE)
     char path[512] = { 0 };
 #if defined(PLATFORM_ANDROID)
@@ -2742,7 +3037,7 @@ int LoadStorageValue(unsigned int position)
             value = dataPtr[position];
         }
 
-        RL_FREE(fileData);
+        UnloadFileData(fileData);
     }
 #endif
     return value;
@@ -2767,9 +3062,11 @@ void OpenURL(const char *url)
         char *cmd = (char *)RL_CALLOC(strlen(url) + 10, sizeof(char));
     #if defined(_WIN32)
         sprintf(cmd, "explorer %s", url);
-    #elif defined(__linux__)
+    #endif
+    #if defined(__linux__) || defined(__FreeBSD__)
         sprintf(cmd, "xdg-open '%s'", url); // Alternatives: firefox, x-www-browser
-    #elif defined(__APPLE__)
+    #endif
+    #if defined(__APPLE__)
         sprintf(cmd, "open '%s'", url);
     #endif
         system(cmd);
@@ -2903,13 +3200,12 @@ const char *GetGamepadName(int gamepad)
 #if defined(PLATFORM_DESKTOP)
     if (CORE.Input.Gamepad.ready[gamepad]) return glfwGetJoystickName(gamepad);
     else return NULL;
-#elif defined(PLATFORM_RPI) || defined(PLATFORM_DRM)
-    if (CORE.Input.Gamepad.ready[gamepad]) ioctl(CORE.Input.Gamepad.streamId[gamepad], JSIOCGNAME(64), &CORE.Input.Gamepad.name);
-
-    return CORE.Input.Gamepad.name;
-#else
-    return NULL;
 #endif
+#if defined(PLATFORM_RPI) || defined(PLATFORM_DRM)
+    if (CORE.Input.Gamepad.ready[gamepad]) ioctl(CORE.Input.Gamepad.streamId[gamepad], JSIOCGNAME(64), &CORE.Input.Gamepad.name);
+    return CORE.Input.Gamepad.name;
+#endif
+    return NULL;
 }
 
 // Return gamepad axis count
@@ -2970,7 +3266,7 @@ bool IsGamepadButtonReleased(int gamepad, int button)
     return released;
 }
 
-// Detect if a mouse button is NOT being pressed
+// Detect if a gamepad button is NOT being pressed
 bool IsGamepadButtonUp(int gamepad, int button)
 {
     bool result = false;
@@ -3111,17 +3407,12 @@ float GetMouseWheelMove(void)
 {
 #if defined(PLATFORM_ANDROID)
     return 0.0f;
-#elif defined(PLATFORM_WEB)
-    return CORE.Input.Mouse.previousWheelMove/100.0f;
-#else
-    return CORE.Input.Mouse.previousWheelMove;
 #endif
-}
+#if defined(PLATFORM_WEB)
+    return CORE.Input.Mouse.previousWheelMove/100.0f;
+#endif
 
-// Returns mouse cursor
-int GetMouseCursor(void)
-{
-    return CORE.Input.Mouse.cursor;
+    return CORE.Input.Mouse.previousWheelMove;
 }
 
 // Set mouse cursor
@@ -3165,11 +3456,16 @@ Vector2 GetTouchPosition(int index)
 {
     Vector2 position = { -1.0f, -1.0f };
 
-#if defined(PLATFORM_ANDROID) || defined(PLATFORM_WEB) || defined(PLATFORM_RPI) || defined(PLATFORM_DRM) || defined(PLATFORM_UWP)
+#if defined(PLATFORM_DESKTOP)
+    // TODO: GLFW does not support multi-touch input just yet
+    // https://www.codeproject.com/Articles/668404/Programming-for-Multi-Touch
+    // https://docs.microsoft.com/en-us/windows/win32/wintouch/getting-started-with-multi-touch-messages
+    if (index == 0) position = GetMousePosition();
+#endif
+#if defined(PLATFORM_ANDROID)
     if (index < MAX_TOUCH_POINTS) position = CORE.Input.Touch.position[index];
     else TRACELOG(LOG_WARNING, "INPUT: Required touch point out of range (Max touch points: %i)", MAX_TOUCH_POINTS);
 
-    #if defined(PLATFORM_ANDROID)
     if ((CORE.Window.screen.width > CORE.Window.display.width) || (CORE.Window.screen.height > CORE.Window.display.height))
     {
         position.x = position.x*((float)CORE.Window.screen.width/(float)(CORE.Window.display.width - CORE.Window.renderOffset.x)) - CORE.Window.renderOffset.x/2;
@@ -3180,13 +3476,12 @@ Vector2 GetTouchPosition(int index)
         position.x = position.x*((float)CORE.Window.render.width/(float)CORE.Window.display.width) - CORE.Window.renderOffset.x/2;
         position.y = position.y*((float)CORE.Window.render.height/(float)CORE.Window.display.height) - CORE.Window.renderOffset.y/2;
     }
-    #endif
+#endif
+#if defined(PLATFORM_WEB) || defined(PLATFORM_RPI) || defined(PLATFORM_DRM) || defined(PLATFORM_UWP)
+    if (index < MAX_TOUCH_POINTS) position = CORE.Input.Touch.position[index];
+    else TRACELOG(LOG_WARNING, "INPUT: Required touch point out of range (Max touch points: %i)", MAX_TOUCH_POINTS);
 
-#elif defined(PLATFORM_DESKTOP)
-    // TODO: GLFW is not supporting multi-touch input just yet
-    // https://www.codeproject.com/Articles/668404/Programming-for-Multi-Touch
-    // https://docs.microsoft.com/en-us/windows/win32/wintouch/getting-started-with-multi-touch-messages
-    if (index == 0) position = GetMousePosition();
+    // TODO: Touch position scaling required?
 #endif
 
     return position;
@@ -3291,7 +3586,7 @@ static bool InitGraphicsDevice(int width, int height)
         // NOTE: This hint only has an effect on platforms where screen coordinates and pixels always map 1:1 such as Windows and X11.
         // On platforms like macOS the resolution of the framebuffer is changed independently of the window size.
         glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);   // Scale content area based on the monitor content scale where window is placed on
-    #if !defined(__APPLE__)
+    #if defined(__APPLE__)
         glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
     #endif
     }
@@ -3300,6 +3595,7 @@ static bool InitGraphicsDevice(int width, int height)
 
     if (CORE.Window.flags & FLAG_MSAA_4X_HINT)
     {
+        // NOTE: MSAA is only enabled for main framebuffer, not user-created FBOs
         TRACELOG(LOG_INFO, "DISPLAY: Trying to enable MSAA x4");
         glfwWindowHint(GLFW_SAMPLES, 4);   // Tries to enable multisampling x4 (MSAA), default is 0
     }
@@ -3879,7 +4175,7 @@ static bool InitGraphicsDevice(int width, int height)
 
     TRACELOG(LOG_TRACE, "DISPLAY: EGL configs available: %d", numConfigs);
 
-    EGLConfig *configs = calloc(numConfigs, sizeof(*configs));
+    EGLConfig *configs = RL_CALLOC(numConfigs, sizeof(*configs));
     if (!configs)
     {
         TRACELOG(LOG_WARNING, "DISPLAY: Failed to get memory for EGL configs");
@@ -3916,7 +4212,7 @@ static bool InitGraphicsDevice(int width, int height)
         }
     }
 
-    free(configs);
+    RL_FREE(configs);
 
     if (!found)
     {
@@ -4058,11 +4354,15 @@ static bool InitGraphicsDevice(int width, int height)
 #if defined(PLATFORM_DESKTOP)
     if ((CORE.Window.flags & FLAG_WINDOW_HIGHDPI) > 0)
     {
+        // NOTE: On APPLE platforms system should manage window/input scaling and also framebuffer scaling
+        // Framebuffer scaling should be activated with: glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
+    #if !defined(__APPLE__)
         glfwGetFramebufferSize(CORE.Window.handle, &fbWidth, &fbHeight);
 
         // Screen scaling matrix is required in case desired screen area is different than display area
         CORE.Window.screenScale = MatrixScale((float)fbWidth/CORE.Window.screen.width, (float)fbHeight/CORE.Window.screen.height, 1.0f);
-    #if !defined(__APPLE__)
+        
+        // Mouse input scaling for the new screen size
         SetMouseScale((float)CORE.Window.screen.width/fbWidth, (float)CORE.Window.screen.height/fbHeight);
     #endif
     }
@@ -4092,9 +4392,15 @@ static void SetupViewport(int width, int height)
     CORE.Window.render.height = height;
 
     // Set viewport width and height
-    // NOTE: We consider render size and offset in case black bars are required and
+    // NOTE: We consider render size (scaled) and offset in case black bars are required and
     // render area does not match full display area (this situation is only applicable on fullscreen mode)
+#if defined(__APPLE__)
+    float xScale = 1.0f, yScale = 1.0f;
+    glfwGetWindowContentScale(CORE.Window.handle, &xScale, &yScale);
+    rlViewport(CORE.Window.renderOffset.x/2*xScale, CORE.Window.renderOffset.y/2*yScale, (CORE.Window.render.width - CORE.Window.renderOffset.x)*xScale, (CORE.Window.render.height - CORE.Window.renderOffset.y)*yScale);
+#else    
     rlViewport(CORE.Window.renderOffset.x/2, CORE.Window.renderOffset.y/2, CORE.Window.render.width - CORE.Window.renderOffset.x, CORE.Window.render.height - CORE.Window.renderOffset.y);
+#endif
 
     rlMatrixMode(RL_PROJECTION);        // Switch to projection matrix
     rlLoadIdentity();                   // Reset current matrix (projection)
@@ -4188,10 +4494,14 @@ static void SetupFramebuffer(int width, int height)
 // Initialize hi-resolution timer
 static void InitTimer(void)
 {
-    srand((unsigned int)time(NULL));              // Initialize random seed
+    srand((unsigned int)time(NULL));    // Initialize random seed
 
-#if !defined(SUPPORT_BUSY_WAIT_LOOP) && defined(_WIN32) && !defined(PLATFORM_UWP)
-    timeBeginPeriod(1);             // Setup high-resolution timer to 1ms (granularity of 1-2 ms)
+// Setting a higher resolution can improve the accuracy of time-out intervals in wait functions.
+// However, it can also reduce overall system performance, because the thread scheduler switches tasks more often.
+// High resolutions can also prevent the CPU power management system from entering power-saving modes.
+// Setting a higher resolution does not improve the accuracy of the high-resolution performance counter.
+#if defined(_WIN32) && defined(SUPPORT_WINMM_HIGHRES_TIMER) && !defined(SUPPORT_BUSY_WAIT_LOOP) && !defined(PLATFORM_UWP)
+    timeBeginPeriod(1);                 // Setup high-resolution timer to 1ms (granularity of 1-2 ms)
 #endif
 
 #if defined(PLATFORM_ANDROID) || defined(PLATFORM_RPI) || defined(PLATFORM_DRM)
@@ -4204,7 +4514,7 @@ static void InitTimer(void)
     else TRACELOG(LOG_WARNING, "TIMER: Hi-resolution timer not available");
 #endif
 
-    CORE.Time.previous = GetTime();       // Get time as double
+    CORE.Time.previous = GetTime();     // Get time as double
 }
 
 // Wait for some milliseconds (stop program execution)
@@ -4234,7 +4544,8 @@ static void Wait(float ms)
 
     #if defined(_WIN32)
         Sleep((unsigned int)ms);
-    #elif defined(__linux__) || defined(PLATFORM_WEB)
+    #endif
+    #if defined(__linux__) || defined(__FreeBSD__) || defined(__EMSCRIPTEN__)
         struct timespec req = { 0 };
         time_t sec = (int)(ms/1000.0f);
         ms -= (sec*1000);
@@ -4243,7 +4554,8 @@ static void Wait(float ms)
 
         // NOTE: Use nanosleep() on Unix platforms... usleep() it's deprecated.
         while (nanosleep(&req, &req) == -1) continue;
-    #elif defined(__APPLE__)
+    #endif
+    #if defined(__APPLE__)
         usleep(ms*1000.0f);
     #endif
 
@@ -4601,16 +4913,18 @@ static void ErrorCallback(int error, const char *description)
 static void WindowSizeCallback(GLFWwindow *window, int width, int height)
 {
     SetupViewport(width, height);    // Reset viewport and projection matrix for new size
+    CORE.Window.currentFbo.width = width;
+    CORE.Window.currentFbo.height = height;
+    CORE.Window.resizedLastFrame = true;
+
+    if(IsWindowFullscreen())
+        return;
 
     // Set current screen size
     CORE.Window.screen.width = width;
     CORE.Window.screen.height = height;
-    CORE.Window.currentFbo.width = width;
-    CORE.Window.currentFbo.height = height;
-
     // NOTE: Postprocessing texture is not scaled to new size
 
-    CORE.Window.resizedLastFrame = true;
 }
 
 // GLFW3 WindowIconify Callback, runs when window is minimized/restored
@@ -4876,7 +5190,7 @@ static void AndroidCommandCallback(struct android_app *app, int32_t cmd)
                     LoadFontDefault();
                     Rectangle rec = GetFontDefault().recs[95];
                     // NOTE: We setup a 1px padding on char rectangle to avoid pixel bleeding on MSAA filtering
-                    SetShapesTexture(GetFontDefault().texture, (Rectangle){ rec.x + 1, rec.y + 1, rec.width - 2, rec.height - 2 });
+                    rlSetShapesTexture(GetFontDefault().texture, (Rectangle){ rec.x + 1, rec.y + 1, rec.width - 2, rec.height - 2 });
                 #endif
 
                     // TODO: GPU assets reload in case of lost focus (lost context)

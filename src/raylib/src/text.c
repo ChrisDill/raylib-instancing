@@ -196,7 +196,7 @@ extern void LoadFontDefault(void)
         .data = calloc(128*128, 2),  // 2 bytes per pixel (gray + alpha)
         .width = 128,
         .height = 128,
-        .format = UNCOMPRESSED_GRAY_ALPHA,
+        .format = PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA,
         .mipmaps = 1
     };
 
@@ -328,7 +328,7 @@ Font LoadFont(const char *fileName)
         TRACELOG(LOG_WARNING, "FONT: [%s] Failed to load font texture -> Using default font", fileName);
         font = GetFontDefault();
     }
-    else SetTextureFilter(font.texture, FILTER_POINT);    // By default we set point filter (best performance)
+    else SetTextureFilter(font.texture, TEXTURE_FILTER_POINT);    // By default we set point filter (best performance)
 
     return font;
 }
@@ -432,7 +432,7 @@ Font LoadFontFromImage(Image image, Color key, int firstChar)
     }
 
     // NOTE: We need to remove key color borders from image to avoid weird
-    // artifacts on texture scaling when using FILTER_BILINEAR or FILTER_TRILINEAR
+    // artifacts on texture scaling when using TEXTURE_FILTER_BILINEAR or TEXTURE_FILTER_TRILINEAR
     for (int i = 0; i < image.height*image.width; i++) if (COLOR_EQUAL(pixels[i], key)) pixels[i] = BLANK;
 
     // Create a new image with the processed color data (key color replaced by BLANK)
@@ -440,7 +440,7 @@ Font LoadFontFromImage(Image image, Color key, int firstChar)
         .data = pixels,
         .width = image.width,
         .height = image.height,
-        .format = UNCOMPRESSED_R8G8B8A8,
+        .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
         .mipmaps = 1
     };
 
@@ -479,7 +479,7 @@ Font LoadFontFromImage(Image image, Color key, int firstChar)
     return font;
 }
 
-// Load font from memory buffer, fileType refers to extension: i.e. "ttf"
+// Load font from memory buffer, fileType refers to extension: i.e. ".ttf"
 Font LoadFontFromMemory(const char *fileType, const unsigned char *fileData, int dataSize, int fontSize, int *fontChars, int charsCount)
 {
     Font font = { 0 };
@@ -488,8 +488,8 @@ Font LoadFontFromMemory(const char *fileType, const unsigned char *fileData, int
     strcpy(fileExtLower, TextToLower(fileType));
 
 #if defined(SUPPORT_FILEFORMAT_TTF)
-    if (TextIsEqual(fileExtLower, "ttf") ||
-        TextIsEqual(fileExtLower, "otf"))
+    if (TextIsEqual(fileExtLower, ".ttf") ||
+        TextIsEqual(fileExtLower, ".otf"))
     {
         font.baseSize = fontSize;
         font.charsCount = (charsCount > 0)? charsCount : 95;
@@ -598,7 +598,7 @@ CharInfo *LoadFontData(const unsigned char *fileData, int dataSize, int fontSize
                 chars[i].image.width = chw;
                 chars[i].image.height = chh;
                 chars[i].image.mipmaps = 1;
-                chars[i].image.format = UNCOMPRESSED_GRAYSCALE;
+                chars[i].image.format = PIXELFORMAT_UNCOMPRESSED_GRAYSCALE;
 
                 chars[i].offsetY += (int)((float)ascent*scaleFactor);
 
@@ -609,7 +609,7 @@ CharInfo *LoadFontData(const unsigned char *fileData, int dataSize, int fontSize
                         .data = calloc(chars[i].advanceX*fontSize, 2),
                         .width = chars[i].advanceX,
                         .height = fontSize,
-                        .format = UNCOMPRESSED_GRAYSCALE,
+                        .format = PIXELFORMAT_UNCOMPRESSED_GRAYSCALE,
                         .mipmaps = 1
                     };
 
@@ -679,7 +679,7 @@ Image GenImageFontAtlas(const CharInfo *chars, Rectangle **charRecs, int charsCo
     atlas.width = imageSize;   // Atlas bitmap width
     atlas.height = imageSize;  // Atlas bitmap height
     atlas.data = (unsigned char *)RL_CALLOC(1, atlas.width*atlas.height);      // Create a bitmap to store characters (8 bpp)
-    atlas.format = UNCOMPRESSED_GRAYSCALE;
+    atlas.format = PIXELFORMAT_UNCOMPRESSED_GRAYSCALE;
     atlas.mipmaps = 1;
 
     // DEBUG: We can see padding in the generated image setting a gray background...
@@ -783,7 +783,7 @@ Image GenImageFontAtlas(const CharInfo *chars, Rectangle **charRecs, int charsCo
 
     RL_FREE(atlas.data);
     atlas.data = dataGrayAlpha;
-    atlas.format = UNCOMPRESSED_GRAY_ALPHA;
+    atlas.format = PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA;
 
     *charRecs = recs;
 
@@ -1175,7 +1175,7 @@ const char *TextFormat(const char *text, ...)
 
     va_list args;
     va_start(args, text);
-    vsprintf(currentBuffer, text, args);
+    vsnprintf(currentBuffer, MAX_TEXT_BUFFER_LENGTH, text, args);
     va_end(args);
 
     index += 1;     // Move to next buffer for next function call
@@ -1365,6 +1365,7 @@ const char *TextJoin(const char **textList, int count, const char *delimiter)
 }
 
 // Split string into multiple strings
+// REQUIRES: memset()
 const char **TextSplit(const char *text, char delimiter, int *count)
 {
     // NOTE: Current implementation returns a copy of the provided string with '\0' (string end delimiter)
@@ -1426,6 +1427,7 @@ int TextFindIndex(const char *text, const char *find)
 }
 
 // Get upper case version of provided string
+// REQUIRES: toupper()
 const char *TextToUpper(const char *text)
 {
     static char buffer[MAX_TEXT_BUFFER_LENGTH] = { 0 };
@@ -1447,6 +1449,7 @@ const char *TextToUpper(const char *text)
 }
 
 // Get lower case version of provided string
+// REQUIRES: tolower()
 const char *TextToLower(const char *text)
 {
     static char buffer[MAX_TEXT_BUFFER_LENGTH] = { 0 };
@@ -1465,6 +1468,7 @@ const char *TextToLower(const char *text)
 }
 
 // Get Pascal case notation version of provided string
+// REQUIRES: toupper()
 const char *TextToPascal(const char *text)
 {
     static char buffer[MAX_TEXT_BUFFER_LENGTH] = { 0 };
@@ -1488,7 +1492,9 @@ const char *TextToPascal(const char *text)
     return buffer;
 }
 
-// Encode text codepoint into utf8 text (memory must be freed!)
+// Encode text codepoint into utf8 text
+// REQUIRES: memcpy()
+// WARNING: Allocated memory should be manually freed
 char *TextToUtf8(int *codepoints, int length)
 {
     // We allocate enough memory fo fit all possible codepoints
@@ -1551,6 +1557,7 @@ RLAPI const char *CodepointToUtf8(int codepoint, int *byteLength)
 }
 
 // Get all codepoints in a string, codepoints count returned by parameters
+// REQUIRES: memset()
 int *GetCodepoints(const char *text, int *count)
 {
     static int codepoints[MAX_TEXT_UNICODE_CHARS] = { 0 };
@@ -1711,6 +1718,7 @@ int GetNextCodepoint(const char *text, int *bytesProcessed)
 #if defined(SUPPORT_FILEFORMAT_FNT)
 
 // Read a line from memory
+// REQUIRES: memcpy()
 // NOTE: Returns the number of bytes read
 static int GetLine(const char *origin, char *buffer, int maxLength)
 {
@@ -1794,14 +1802,14 @@ static Font LoadBMFont(const char *fileName)
 
     Image imFont = LoadImage(imPath);
 
-    if (imFont.format == UNCOMPRESSED_GRAYSCALE)
+    if (imFont.format == PIXELFORMAT_UNCOMPRESSED_GRAYSCALE)
     {
         // Convert image to GRAYSCALE + ALPHA, using the mask as the alpha channel
         Image imFontAlpha = {
             .data = calloc(imFont.width*imFont.height, 2),
             .width = imFont.width,
             .height = imFont.height,
-            .format = UNCOMPRESSED_GRAY_ALPHA,
+            .format = PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA,
             .mipmaps = 1
         };
 

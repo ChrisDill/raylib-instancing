@@ -856,14 +856,14 @@ RMDEF Matrix MatrixRotate(Vector3 axis, float angle)
 
     float x = axis.x, y = axis.y, z = axis.z;
 
-    float length = sqrtf(x*x + y*y + z*z);
+    float lengthSquared = x*x + y*y + z*z;
 
-    if ((length != 1.0f) && (length != 0.0f))
+    if ((lengthSquared != 1.0f) && (lengthSquared != 0.0f))
     {
-        length = 1.0f/length;
-        x *= length;
-        y *= length;
-        z *= length;
+        float inverseLength = 1.0f/sqrtf(lengthSquared);
+        x *= inverseLength;
+        y *= inverseLength;
+        z *= inverseLength;
     }
 
     float sinres = sinf(angle);
@@ -970,13 +970,36 @@ RMDEF Matrix MatrixRotateXYZ(Vector3 ang)
 }
 
 // Returns zyx-rotation matrix (angles in radians)
-// TODO: This solution is suboptimal, it should be possible to create this matrix in one go
-// instead of using a 3 matrix multiplication
 RMDEF Matrix MatrixRotateZYX(Vector3 ang)
 {
-    Matrix result = MatrixRotateZ(ang.z);
-    result = MatrixMultiply(result, MatrixRotateY(ang.y));
-    result = MatrixMultiply(result, MatrixRotateX(ang.x));
+    Matrix result = { 0 };
+
+    float cz = cosf(ang.z);
+    float sz = sinf(ang.z);
+    float cy = cosf(ang.y);
+    float sy = sinf(ang.y);
+    float cx = cosf(ang.x);
+    float sx = sinf(ang.x);
+
+    result.m0 = cz*cy;
+    result.m1 = cz*sy*sx - cx*sz;
+    result.m2 = sz*sx + cz*cx*sy;
+    result.m3 = 0;
+
+    result.m4 = cy*sz;
+    result.m5 = cz*cx + sz*sy*sx;
+    result.m6 = cx*sz*sy - cz*sx;
+    result.m7 = 0;
+
+    result.m8 = -sy;
+    result.m9 = cy*sx;
+    result.m10 = cy*cx;
+    result.m11 = 0;
+
+    result.m12 = 0;
+    result.m13 = 0;
+    result.m14 = 0;
+    result.m15 = 1;
 
     return result;
 }
@@ -1271,6 +1294,12 @@ RMDEF Quaternion QuaternionSlerp(Quaternion q1, Quaternion q2, float amount)
 
     float cosHalfTheta =  q1.x*q2.x + q1.y*q2.y + q1.z*q2.z + q1.w*q2.w;
 
+    if (cosHalfTheta < 0)
+    {
+        q2.x = -q2.x; q2.y = -q2.y; q2.z = -q2.z; q2.w = -q2.w;
+        cosHalfTheta = -cosHalfTheta;
+    }
+
     if (fabs(cosHalfTheta) >= 1.0f) result = q1;
     else if (cosHalfTheta > 0.95f) result = QuaternionNlerp(q1, q2, amount);
     else
@@ -1432,17 +1461,18 @@ RMDEF void QuaternionToAxisAngle(Quaternion q, Vector3 *outAxis, float *outAngle
     *outAngle = resAngle;
 }
 
-// Returns he quaternion equivalent to Euler angles
-RMDEF Quaternion QuaternionFromEuler(float roll, float pitch, float yaw)
+// Returns the quaternion equivalent to Euler angles
+// NOTE: Rotation order is ZYX
+RMDEF Quaternion QuaternionFromEuler(float pitch, float yaw, float roll)
 {
     Quaternion q = { 0 };
 
-    float x0 = cosf(roll*0.5f);
-    float x1 = sinf(roll*0.5f);
-    float y0 = cosf(pitch*0.5f);
-    float y1 = sinf(pitch*0.5f);
-    float z0 = cosf(yaw*0.5f);
-    float z1 = sinf(yaw*0.5f);
+    float x0 = cosf(pitch*0.5f);
+    float x1 = sinf(pitch*0.5f);
+    float y0 = cosf(yaw*0.5f);
+    float y1 = sinf(yaw*0.5f);
+    float z0 = cosf(roll*0.5f);
+    float z1 = sinf(roll*0.5f);
 
     q.x = x1*y0*z0 - x0*y1*z1;
     q.y = x0*y1*z0 + x1*y0*z1;
