@@ -1,13 +1,8 @@
 /*******************************************************************************************
 *
-*   raylib [textures] example - Bunnymark instanced
+*   raylib [textures] example - bunnymark instanced
 *
 *   Based on the the existing textures_bunnymark example.
-*
-*   This example has been created using raylib 3.0 (www.raylib.com)
-*   raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
-*
-*   Copyright (c) 2020 Chris Dill
 *
 ********************************************************************************************/
 
@@ -140,7 +135,7 @@ int main(void)
             BeginShaderMode(shader);
             BeginModeInstanced(bunniesCount);
             DrawTexture(texBunny, 0, 0, WHITE);
-            rlglDraw();
+            rlDrawRenderBatchActive();
             EndModeInstanced();
             EndShaderMode();
         }

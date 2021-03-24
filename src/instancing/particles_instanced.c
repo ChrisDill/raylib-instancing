@@ -2,11 +2,6 @@
 *
 *   raylib [models] example - particles instanced
 *
-*   This example has been created using raylib 3.0 (www.raylib.com)
-*   raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
-*
-*   Copyright (c) 2020 Chris Dill
-*
 ********************************************************************************************/
 
 #include "glad.h"
@@ -21,6 +16,7 @@ typedef struct Particle {
     Vector2 position;
     Vector2 speed;
     Color color;
+    float lifetime;
 } Particle;
 
 int main(void)
@@ -72,9 +68,7 @@ int main(void)
 
     glBindVertexArray(0);
 
-    bool drawInstanced = false;
-
-    EnableCursor();
+    bool drawInstanced = true;
 
     SetTargetFPS(60); // Set our game to run at 60 frames-per-second.
     //--------------------------------------------------------------------------------------
@@ -85,9 +79,13 @@ int main(void)
         // Update
         //----------------------------------------------------------------------------------
         if (IsKeyPressed(KEY_ONE))
+        {
             drawInstanced = false;
+        }
         if (IsKeyPressed(KEY_TWO))
+        {
             drawInstanced = true;
+        }
 
         if (IsMouseButtonDown(MOUSE_LEFT_BUTTON))
         {
@@ -102,21 +100,19 @@ int main(void)
                     particles[particleCount].color = (Color) { GetRandomValue(50, 240),
                         GetRandomValue(80, 240),
                         GetRandomValue(100, 240), 255 };
+                    particles[particleCount].lifetime = (float)GetRandomValue(2, 10);
                     particleCount += 1;
                 }
             }
         }
 
         // Update particles
+        float dt = GetFrameTime();
         for (int i = 0; i < particleCount; i++)
         {
             particles[i].position.x += particles[i].speed.x;
             particles[i].position.y += particles[i].speed.y;
-
-            if (((particles[i].position.x + texParticle.width / 2) > GetScreenWidth()) || ((particles[i].position.x + texParticle.width / 2) < 0))
-                particles[i].speed.x *= -1;
-            if (((particles[i].position.y + texParticle.height / 2) > GetScreenHeight()) || ((particles[i].position.y + texParticle.height / 2 - 40) < 0))
-                particles[i].speed.y *= -1;
+            particles[i].lifetime -= dt;
         }
 
         // Re-upload particles array every frame to apply movement

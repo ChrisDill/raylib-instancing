@@ -2,11 +2,6 @@
 *
 *   raylib [others] example - quads instanced
 *
-*   This example has been created using raylib 2.6-dev (www.raylib.com)
-*   raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
-*
-*   Copyright (c) 2020 Chris Dill
-*
 ********************************************************************************************/
 
 #include "glad.h"
@@ -82,7 +77,7 @@ int main(void)
     }
 
     int loc = GetShaderLocation(shader, "offsets");
-    SetShaderValueV(shader, loc, &translations, UNIFORM_VEC2, 1);
+    SetShaderValueV(shader, loc, &translations, SHADER_UNIFORM_VEC2, 1);
 
     Vector2 size = NormalizedToScreen((Vector2) { 0.10f, 0.10f });
     size.x -= GetScreenWidth() / 2;

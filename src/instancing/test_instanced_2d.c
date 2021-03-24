@@ -2,11 +2,6 @@
 *
 *   raylib [others] example - 2d instancing testbed
 *
-*   This example has been created using raylib 3.0 (www.raylib.com)
-*   raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
-*
-*   Copyright (c) 2020 Chris Dill
-*
 ********************************************************************************************/
 
 #include "glad.h"
@@ -78,11 +73,11 @@ int main(void)
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(screenWidth, screenHeight, "raylib [others] example - 2d instancing testbed");
 
-    Texture2D texture = LoadTexture("resources/images/wabbit_alpha.png");
-    Shader instanceShader = LoadShader("resources/shaders/test_instanced.vs", "resources/shaders/test_instanced.fs");
-
     RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
     SetTextureFilter(target.texture, FILTER_BILINEAR);
+
+    Texture2D texture = LoadTexture("resources/images/wabbit_alpha.png");
+    Shader instanceShader = LoadShader("resources/shaders/test_instanced.vs", "resources/shaders/test_instanced.fs");
 
     // Generate a large list of semi-random model transformation matrices
     // ------------------------------------------------------------------
@@ -99,8 +94,6 @@ int main(void)
     camera.zoom = 1.0f;
 
     int command = INSTANCE_LINE;
-
-    EnableCursor();
 
     SetTargetFPS(60); // Set our game to run at 60 frames-per-second
 
@@ -161,7 +154,6 @@ int main(void)
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
-
         ClearBackground(RAYWHITE);
 
         BeginTextureMode(target);
@@ -203,7 +195,8 @@ int main(void)
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
-    RL_FREE(modelMatrices); // Unload modelMatrices data array
+    // Unload modelMatrices data array
+    RL_FREE(modelMatrices);
     UnloadShader(instanceShader);
     UnloadRenderTexture(target);
 

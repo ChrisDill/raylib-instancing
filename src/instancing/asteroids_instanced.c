@@ -5,14 +5,9 @@
  *   My version of the asteroids example from learnopengl at
  *   https://learnopengl.com/Advanced-OpenGL/Instancing
  *
- *   This example has been created using raylib 3.0 (www.raylib.com)
- *   raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
- *
- *   Copyright (c) 2020 Chris Dill
- *
  ********************************************************************************************/
 
-#include "glad.h"
+#include "external/glad.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
@@ -32,6 +27,10 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "raylib [models] example - asteroids instanced");
 
     Shader rockShader = LoadShader("resources/shaders/asteroids_instanced.vs", "resources/shaders/asteroids_instanced.fs");
+    rockShader.locs[SHADER_LOC_MATRIX_MVP] = GetShaderLocation(rockShader, "mvp");
+    rockShader.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocationAttrib(rockShader, "instance");
+    rockShader.locs[SHADER_LOC_MATRIX_VIEW] = GetShaderLocation(rockShader, "view");
+    rockShader.locs[SHADER_LOC_MATRIX_PROJECTION] = GetShaderLocation(rockShader, "projection");
 
     // Load models
     Model planet = LoadModel("resources/objects/planet/planet.obj");
@@ -46,7 +45,7 @@ int main(void)
     srand(GetTime());
 
     float radius = 150.0;
-    float offset = 25.0f;
+    float offset = 30.0f;
 
     for (int i = 0; i < asteroidCount; i += 1)
     {
@@ -80,10 +79,10 @@ int main(void)
         model = MatrixMultiply(model, matTranslation);
         model = MatrixMultiply(matRotation, model);
         model = MatrixMultiply(matScale, model);
-        Matrix transposeModel = MatrixTranspose(model);
+        // Matrix transposeModel = MatrixTranspose(model);
 
         // 4. Now add to list of matrices.
-        modelMatrices[i] = transposeModel;
+        modelMatrices[i] = model;
     }
 
     // Configure instanced array.
@@ -123,16 +122,16 @@ int main(void)
         glBindVertexArray(0);
     }
 
-    bool drawInstanced = false;
+    bool drawInstanced = true;
     bool paused = false;
 
     // Define the camera to look into our 3d world
     Camera3D camera = { 0 };
-    camera.position = (Vector3) { 0.0f, 0.0f, 155.0f }; // Camera position
-    camera.target = (Vector3) { 0.0f, 0.0f, 0.0f };     // Camera looking at point
-    camera.up = (Vector3) { 0.0f, 1.0f, 0.0f };         // Camera up vector (rotation towards target)
-    camera.fovy = 45.0f;                                // Camera field-of-view Y
-    camera.type = CAMERA_PERSPECTIVE;                   // Camera mode type
+    camera.position = (Vector3) { 0.0f, 0.0f, 155.0f };
+    camera.target = (Vector3) { 0.0f, 0.0f, 0.0f };
+    camera.up = (Vector3) { 0.0f, 1.0f, 0.0f };
+    camera.fovy = 45.0f;
+    camera.projection = CAMERA_PERSPECTIVE;
 
     // Custom first person camera.
     SetCameraMode(camera, CAMERA_CUSTOM);
@@ -142,6 +141,8 @@ int main(void)
     Vector2 mouseLastPosition = mousePosition;
 
     DisableCursor();
+
+    float angle = 0.0f;
 
     SetTargetFPS(60); // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
@@ -158,8 +159,14 @@ int main(void)
             Vector2 mouseDelta = Vector2Subtract(mousePosition, mouseLastPosition);
             mouseLastPosition = mousePosition;
 
-            // Free moving camera.
             UpdateCameraCustom(&camera, mouseDelta, GetFrameTime());
+        }
+
+        if (IsKeyPressed(KEY_R))
+        {
+            camera.position = (Vector3) { 0.0f, 0.0f, 155.0f };
+            camera.target = (Vector3) { 0.0f, 0.0f, 0.0f };
+            camera.up = (Vector3) { 0.0f, 1.0f, 0.0f };
         }
 
         if (IsKeyPressed(KEY_F3))
@@ -177,9 +184,13 @@ int main(void)
         }
 
         if (IsKeyPressed(KEY_ONE))
+        {
             drawInstanced = false;
+        }
         if (IsKeyPressed(KEY_TWO))
+        {
             drawInstanced = true;
+        }
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -188,29 +199,28 @@ int main(void)
         ClearBackground((Color) { 26, 26, 26, 255 });
 
         BeginMode3D(camera);
-        DrawModel(planet, Vector3Zero(), 4.0f, WHITE);
+
+        Vector3 axis = { 0.0f, 0.0f, 1.0f };
+        Vector3 scale = { 4.0f, 4.0f, 4.0f };
+        DrawModelEx(planet, Vector3Zero(), axis, angle, scale, WHITE);
 
         // Draw all asteroids at once.
         // 1 draw call is made per mesh in the model.
         // @NOTE: Each mesh is currently a seperate draw call.
         if (drawInstanced)
         {
-            BeginModeInstanced(asteroidCount);
-
-            rock.transform = MatrixIdentity();
+            // rock.transform = MatrixIdentity();
+            // DrawModel(rock, Vector3Zero(), 1.0f, WHITE);
             rock.materials[0].shader = rockShader;
-            DrawModel(rock, Vector3Zero(), 1.0f, WHITE);
-
-            EndModeInstanced();
+            rlDrawMeshInstanced(rock.meshes[0], rock.materials[0], modelMatrices, asteroidCount);
         }
         // Draw each asteroid one at a time.
         else
         {
-            rock.materials[0].shader = GetShaderDefault();
-
+            rock.materials[0].shader = rlGetShaderDefault();
             for (int i = 0; i < asteroidCount; i++)
             {
-                rock.transform = MatrixTranspose(modelMatrices[i]);
+                rock.transform = modelMatrices[i];
                 DrawModel(rock, Vector3Zero(), 1.0f, WHITE);
             }
         }

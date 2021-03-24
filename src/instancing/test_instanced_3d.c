@@ -2,18 +2,15 @@
 *
 *   raylib [others] example - 3d instancing testbed
 *
-*   This example has been created using raylib 3.0 (www.raylib.com)
-*   raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
-*
-*   Copyright (c) 2020 Chris Dill
-*
 ********************************************************************************************/
 
 #include "glad.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
-#include <stdlib.h> // Required for: malloc(), free()
+
+// Required for: malloc(), free()
+#include <stdlib.h>
 
 #include "camera_first_person.c"
 
@@ -79,9 +76,8 @@ int main(void)
     unsigned int amount = 20;
     Matrix* modelMatrices = (Matrix*)RL_CALLOC(amount, sizeof(Matrix));
 
-    bool drawInstanced = false;
+    bool drawInstanced = true;
     bool paused = false;
-
     int command = INSTANCE_TRIANGLE;
 
     // Define the camera to look into our 3d world
@@ -90,7 +86,7 @@ int main(void)
     camera.target = (Vector3) { 0.0f, 0.0f, 0.0f };      // Camera looking at point
     camera.up = (Vector3) { 0.0f, 1.0f, 0.0f };          // Camera up vector (rotation towards target)
     camera.fovy = 45.0f;                                 // Camera field-of-view Y
-    camera.type = CAMERA_PERSPECTIVE;                    // Camera mode type
+    camera.projection = CAMERA_PERSPECTIVE;                    // Camera mode type
 
     SetCameraMode(camera, CAMERA_CUSTOM); // Set a free camera mode
     Load3DCamera();
@@ -98,9 +94,9 @@ int main(void)
     Vector2 mousePosition = GetMousePosition();
     Vector2 mouseLastPosition = mousePosition;
 
+    SetTargetFPS(60); // Set our game to run at 60 frames-per-second
     DisableCursor();
 
-    SetTargetFPS(60); // Set our game to run at 60 frames-per-second
     glEnable(GL_CULL_FACE_MODE);
     glCullFace(GL_BACK);
     glEnable(GL_DEPTH_TEST);
@@ -119,31 +115,47 @@ int main(void)
             mouseLastPosition = mousePosition;
 
             UpdateCamera(&camera); // Update camera
-            if (camera.type == CAMERA_CUSTOM)
+            if (camera.projection == CAMERA_CUSTOM)
             {
                 UpdateCameraCustom(&camera, mouseDelta, GetFrameTime());
             }
         }
 
         if (IsKeyPressed(KEY_ONE))
+        {
             drawInstanced = false;
+        }
         if (IsKeyPressed(KEY_TWO))
+        {
             drawInstanced = true;
+        }
 
         if (IsKeyPressed(KEY_W))
+        {
             amount += 1;
+        }
         if (IsKeyPressed(KEY_S))
+        {
             amount -= 1;
+        }
 
         if (IsKeyPressed(KEY_LEFT))
+        {
             command -= 1;
+        }
         if (IsKeyPressed(KEY_RIGHT))
+        {
             command += 1;
+        }
 
         if (command < 0)
+        {
             command = MAX_COMMANDS - 1;
+        }
         if (command > MAX_COMMANDS - 1)
+        {
             command = 0;
+        }
         //----------------------------------------------------------------------------------
 
         // Draw
