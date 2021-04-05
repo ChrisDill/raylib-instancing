@@ -25,7 +25,7 @@
 *
 **********************************************************************************************/
 
-#define RAYLIB_VERSION  "3.5"
+#define RAYLIB_VERSION  "3.7"
 
 //------------------------------------------------------------------------------------
 // Module: core - Configuration Flags
@@ -111,9 +111,6 @@
 //------------------------------------------------------------------------------------
 // Module: shapes - Configuration Flags
 //------------------------------------------------------------------------------------
-// Draw rectangle shapes using font texture white character instead of default white texture
-// Allows drawing rectangles and text with a single draw call, very useful for GUI systems!
-#define SUPPORT_FONT_TEXTURE        1
 // Use QUADS instead of TRIANGLES for drawing when possible
 // Some lines-based shapes could still use lines
 #define SUPPORT_QUADS_DRAW_MODE     1
@@ -189,7 +186,7 @@
 #define SUPPORT_FILEFORMAT_XM       1
 #define SUPPORT_FILEFORMAT_MOD      1
 #define SUPPORT_FILEFORMAT_MP3      1
-//#define SUPPORT_FILEFORMAT_FLAC     1
+#define SUPPORT_FILEFORMAT_FLAC     1
 
 // audio: Configuration values
 //------------------------------------------------------------------------------------

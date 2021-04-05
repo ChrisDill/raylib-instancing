@@ -119,7 +119,7 @@
 #if !defined(EXTERNAL_CONFIG_FLAGS)
     #include "config.h"             // Defines module configuration flags
 #else
-    #define RAYLIB_VERSION  "3.5"
+    #define RAYLIB_VERSION  "3.7"
 #endif
 
 #include "utils.h"                  // Required for: TRACELOG macros
@@ -165,7 +165,7 @@
 #include <stdio.h>                  // Required for: sprintf() [Used in OpenURL()]
 #include <string.h>                 // Required for: strrchr(), strcmp(), strlen()
 #include <time.h>                   // Required for: time() [Used in InitTimer()]
-#include <math.h>                   // Required for: tan() [Used in BeginMode3D()]
+#include <math.h>                   // Required for: tan() [Used in BeginMode3D()], atan2f() [Used in InitVrSimulator()]
 
 #include <sys/stat.h>               // Required for: stat() [Used in GetFileModTime()]
 
@@ -321,6 +321,10 @@
     #ifndef STORAGE_DATA_FILE
         #define STORAGE_DATA_FILE  "storage.data"   // Automatic storage filename
     #endif
+#endif
+
+#ifndef MAX_DECOMPRESSION_SIZE
+    #define MAX_DECOMPRESSION_SIZE        64        // Max size allocated for decompression in MB
 #endif
 
 // Flags operation macros
@@ -552,10 +556,6 @@ static int32_t AndroidInputCallback(struct android_app *app, AInputEvent *event)
 #endif
 
 #if defined(PLATFORM_WEB)
-static EM_BOOL EmscriptenFullscreenChangeCallback(int eventType, const EmscriptenFullscreenChangeEvent *event, void *userData);
-static EM_BOOL EmscriptenWindowResizedCallback(int eventType, const void *reserved, void *userData);
-static EM_BOOL EmscriptenKeyboardCallback(int eventType, const EmscriptenKeyboardEvent *keyEvent, void *userData);
-static EM_BOOL EmscriptenMouseCallback(int eventType, const EmscriptenMouseEvent *mouseEvent, void *userData);
 static EM_BOOL EmscriptenTouchCallback(int eventType, const EmscriptenTouchEvent *touchEvent, void *userData);
 static EM_BOOL EmscriptenGamepadCallback(int eventType, const EmscriptenGamepadEvent *gamepadEvent, void *userData);
 #endif
@@ -760,7 +760,10 @@ void InitWindow(int width, int height, const char *title)
     LoadFontDefault();
     Rectangle rec = GetFontDefault().recs[95];
     // NOTE: We setup a 1px padding on char rectangle to avoid pixel bleeding on MSAA filtering
-    rlSetShapesTexture(GetFontDefault().texture, (Rectangle){ rec.x + 1, rec.y + 1, rec.width - 2, rec.height - 2 });
+    SetShapesTexture(GetFontDefault().texture, (Rectangle){ rec.x + 1, rec.y + 1, rec.width - 2, rec.height - 2 });
+#else
+    // Set default internal texture (1px white) and rectangle to be used for shapes drawing
+    SetShapesTexture(rlGetTextureDefault(), (Rectangle){ 0.0f, 0.0f, 1.0f, 1.0f });
 #endif
 #if defined(PLATFORM_DESKTOP)
     if ((CORE.Window.flags & FLAG_WINDOW_HIGHDPI) > 0)
@@ -783,14 +786,12 @@ void InitWindow(int width, int height, const char *title)
 
 #if defined(PLATFORM_WEB)
     // Detect fullscreen change events
-    emscripten_set_fullscreenchange_callback("#canvas", NULL, 1, EmscriptenFullscreenChangeCallback);
+    //emscripten_set_fullscreenchange_callback("#canvas", NULL, 1, EmscriptenFullscreenChangeCallback);
+    //emscripten_set_resize_callback("#canvas", NULL, 1, EmscriptenResizeCallback);
 
     // Support keyboard events
     //emscripten_set_keypress_callback("#canvas", NULL, 1, EmscriptenKeyboardCallback);
-    emscripten_set_keydown_callback("#canvas", NULL, 1, EmscriptenKeyboardCallback);
-
-    // Support mouse events
-    emscripten_set_click_callback("#canvas", NULL, 1, EmscriptenMouseCallback);
+    //emscripten_set_keydown_callback("#canvas", NULL, 1, EmscriptenKeyboardCallback);
 
     // Support touch events
     emscripten_set_touchstart_callback("#canvas", NULL, 1, EmscriptenTouchCallback);
@@ -1080,41 +1081,62 @@ void ToggleFullscreen(void)
     // Try to enable GPU V-Sync, so frames are limited to screen refresh rate (60Hz -> 60 FPS)
     // NOTE: V-Sync can be enabled by graphic driver configuration
     if (CORE.Window.flags & FLAG_VSYNC_HINT) glfwSwapInterval(1);
-
 #endif
 #if defined(PLATFORM_WEB)
-    /*
-    EM_ASM(
+    EM_ASM
+    (
+        // This strategy works well while using raylib minimal web shell for emscripten,
+        // it re-scales the canvas to fullscreen using monitor resolution, for tools this
+        // is a good strategy but maybe games prefer to keep current canvas resolution and
+        // display it in fullscreen, adjusting monitor resolution if possible
         if (document.fullscreenElement) document.exitFullscreen();
-        else Module.requestFullscreen(true, true);
+        else Module.requestFullscreen(false, true);
     );
-    */
 
-    //EM_ASM(Module.requestFullscreen(false, false););
-
-    /*
+/*
     if (!CORE.Window.fullscreen)
     {
-        //https://github.com/emscripten-core/emscripten/issues/5124
+        // Option 1: Request fullscreen for the canvas element
+        // This option does not seem to work at all
+        //emscripten_request_fullscreen("#canvas", false);
+        
+        // Option 2: Request fullscreen for the canvas element with strategy
+        // This option does not seem to work at all
+        // Ref: https://github.com/emscripten-core/emscripten/issues/5124
+        // EmscriptenFullscreenStrategy strategy = {
+            // .scaleMode = EMSCRIPTEN_FULLSCREEN_SCALE_STRETCH, //EMSCRIPTEN_FULLSCREEN_SCALE_ASPECT,
+            // .canvasResolutionScaleMode = EMSCRIPTEN_FULLSCREEN_CANVAS_SCALE_STDDEF,
+            // .filteringMode = EMSCRIPTEN_FULLSCREEN_FILTERING_DEFAULT,
+            // .canvasResizedCallback = EmscriptenWindowResizedCallback,
+            // .canvasResizedCallbackUserData = NULL
+        // };
+        //emscripten_request_fullscreen_strategy("#canvas", EM_FALSE, &strategy);
+        
+        // Option 3: Request fullscreen for the canvas element with strategy 
+        // It works as expected but only inside the browser (client area)
         EmscriptenFullscreenStrategy strategy = {
-            .scaleMode = EMSCRIPTEN_FULLSCREEN_SCALE_STRETCH, //EMSCRIPTEN_FULLSCREEN_SCALE_ASPECT,
+            .scaleMode = EMSCRIPTEN_FULLSCREEN_SCALE_ASPECT,
             .canvasResolutionScaleMode = EMSCRIPTEN_FULLSCREEN_CANVAS_SCALE_STDDEF,
             .filteringMode = EMSCRIPTEN_FULLSCREEN_FILTERING_DEFAULT,
-            .canvasResizedCallback = EmscriptenWindowResizedCallback, //on_canvassize_changed,
+            .canvasResizedCallback = EmscriptenWindowResizedCallback,
             .canvasResizedCallbackUserData = NULL
         };
+        emscripten_enter_soft_fullscreen("#canvas", &strategy);
 
-        emscripten_request_fullscreen("#canvas", false);
-        //emscripten_request_fullscreen_strategy("#canvas", EM_FALSE, &strategy);
-        //emscripten_enter_soft_fullscreen("canvas", &strategy);
-        TRACELOG(LOG_INFO, "emscripten_request_fullscreen_strategy");
+        int width, height;
+        emscripten_get_canvas_element_size("#canvas", &width, &height);
+        TRACELOG(LOG_WARNING, "Emscripten: Enter fullscreen: Canvas size: %i x %i", width, height);
     }
     else
     {
-        TRACELOG(LOG_INFO, "emscripten_exit_fullscreen");
-        emscripten_exit_fullscreen();
+        //emscripten_exit_fullscreen();
+        emscripten_exit_soft_fullscreen();
+        
+        int width, height;
+        emscripten_get_canvas_element_size("#canvas", &width, &height);
+        TRACELOG(LOG_WARNING, "Emscripten: Exit fullscreen: Canvas size: %i x %i", width, height);  
     }
-    */
+*/
 
     CORE.Window.fullscreen = !CORE.Window.fullscreen;          // Toggle fullscreen flag
     CORE.Window.flags ^= FLAG_FULLSCREEN_MODE;
@@ -2032,7 +2054,7 @@ Shader LoadShader(const char *vsFileName, const char *fsFileName)
 
     if (vShaderStr != NULL) RL_FREE(vShaderStr);
     if (fShaderStr != NULL) RL_FREE(fShaderStr);
-    
+
     // After shader loading, we TRY to set default location names
     if (shader.id > 0)
     {
@@ -2043,7 +2065,52 @@ Shader LoadShader(const char *vsFileName, const char *fsFileName)
         //          vertex color location       = 3
         //          vertex tangent location     = 4
         //          vertex texcoord2 location   = 5
-        
+
+        // NOTE: If any location is not found, loc point becomes -1
+
+        // Get handles to GLSL input attibute locations
+        shader.locs[SHADER_LOC_VERTEX_POSITION] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_POSITION);
+        shader.locs[SHADER_LOC_VERTEX_TEXCOORD01] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_TEXCOORD);
+        shader.locs[SHADER_LOC_VERTEX_TEXCOORD02] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_TEXCOORD2);
+        shader.locs[SHADER_LOC_VERTEX_NORMAL] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_NORMAL);
+        shader.locs[SHADER_LOC_VERTEX_TANGENT] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_TANGENT);
+        shader.locs[SHADER_LOC_VERTEX_COLOR] = rlGetLocationAttrib(shader.id, DEFAULT_SHADER_ATTRIB_NAME_COLOR);
+
+        // Get handles to GLSL uniform locations (vertex shader)
+        shader.locs[SHADER_LOC_MATRIX_MVP] = rlGetLocationUniform(shader.id, "mvp");
+        shader.locs[SHADER_LOC_MATRIX_VIEW] = rlGetLocationUniform(shader.id, "view");
+        shader.locs[SHADER_LOC_MATRIX_PROJECTION] = rlGetLocationUniform(shader.id, "projection");
+        shader.locs[SHADER_LOC_MATRIX_NORMAL] = rlGetLocationUniform(shader.id, "matNormal");
+
+        // Get handles to GLSL uniform locations (fragment shader)
+        shader.locs[SHADER_LOC_COLOR_DIFFUSE] = rlGetLocationUniform(shader.id, "colDiffuse");
+        shader.locs[SHADER_LOC_MAP_DIFFUSE] = rlGetLocationUniform(shader.id, "texture0");
+        shader.locs[SHADER_LOC_MAP_SPECULAR] = rlGetLocationUniform(shader.id, "texture1");
+        shader.locs[SHADER_LOC_MAP_NORMAL] = rlGetLocationUniform(shader.id, "texture2");
+    }
+
+    return shader;
+}
+
+// Load shader from code strings and bind default locations
+RLAPI Shader LoadShaderFromMemory(const char *vsCode, const char *fsCode)
+{
+    Shader shader = { 0 };
+    shader.locs = (int *)RL_CALLOC(MAX_SHADER_LOCATIONS, sizeof(int));
+
+    shader.id = rlLoadShaderCode(vsCode, fsCode);
+
+    // After shader loading, we TRY to set default location names
+    if (shader.id > 0)
+    {
+        // Default shader attrib locations have been fixed before linking:
+        //          vertex position location    = 0
+        //          vertex texcoord location    = 1
+        //          vertex normal location      = 2
+        //          vertex color location       = 3
+        //          vertex tangent location     = 4
+        //          vertex texcoord2 location   = 5
+
         // NOTE: If any location is not found, loc point becomes -1
 
         // Get handles to GLSL input attibute locations
@@ -2082,13 +2149,13 @@ void UnloadShader(Shader shader)
 // Begin custom shader mode
 void BeginShaderMode(Shader shader)
 {
-    rlSetShaderActive(shader);
+    rlSetShader(shader);
 }
 
 // End custom shader mode (returns to default shader)
 void EndShaderMode(void)
 {
-    BeginShaderMode(rlGetShaderDefault());
+    rlSetShader(rlGetShaderDefault());
 }
 
 // Get shader uniform location
@@ -2129,7 +2196,7 @@ void SetShaderValueMatrix(Shader shader, int locIndex, Matrix mat)
 void SetShaderValueTexture(Shader shader, int locIndex, Texture2D texture)
 {
     rlEnableShader(shader.id);
-    rlSetUniformSampler(locIndex, texture);
+    rlSetUniformSampler(locIndex, texture.id);
     //rlDisableShader();
 }
 
@@ -2409,7 +2476,7 @@ Vector2 GetWorldToScreenEx(Vector3 position, Camera camera, int width, int heigh
     if (camera.projection == CAMERA_PERSPECTIVE)
     {
         // Calculate projection matrix from perspective
-        matProj = MatrixPerspective(camera.fovy * DEG2RAD, ((double)width/(double)height), RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
+        matProj = MatrixPerspective(camera.fovy*DEG2RAD, ((double)width/(double)height), RL_CULL_DISTANCE_NEAR, RL_CULL_DISTANCE_FAR);
     }
     else if (camera.projection == CAMERA_ORTHOGRAPHIC)
     {
@@ -2496,7 +2563,7 @@ int GetFPS(void)
     return (int)roundf(1.0f/average);
 }
 
-// Returns time in seconds for last frame drawn
+// Returns time in seconds for last frame drawn (delta time)
 float GetFrameTime(void)
 {
     return (float)CORE.Time.frame;
@@ -2897,7 +2964,7 @@ unsigned char *CompressData(unsigned char *data, int dataLength, int *compDataLe
     compData = (unsigned char *)RL_CALLOC(bounds, 1);
     *compDataLength = sdeflate(&sdefl, compData, data, dataLength, COMPRESSION_QUALITY_DEFLATE);   // Compression level 8, same as stbwi
 
-    TraceLog(LOG_INFO, "SYSTEM: Data compressed: Original size: %i -> Comp. size: %i\n", dataLength, compDataLength);
+    TraceLog(LOG_INFO, "SYSTEM: Compress data: Original size: %i -> Comp. size: %i", dataLength, compDataLength);
 #endif
 
     return compData;
@@ -2919,7 +2986,7 @@ unsigned char *DecompressData(unsigned char *compData, int compDataLength, int *
 
     *dataLength = length;
 
-    TraceLog(LOG_INFO, "SYSTEM: Data compressed: Original size: %i -> Comp. size: %i\n", dataLength, compDataLength);
+    TraceLog(LOG_INFO, "SYSTEM: Decompress data: Comp. size: %i -> Original size: %i", compDataLength, dataLength);
 #endif
 
     return data;
@@ -3884,7 +3951,7 @@ static bool InitGraphicsDevice(int width, int height)
     }
 
     const bool allowInterlaced = CORE.Window.flags & FLAG_INTERLACED_HINT;
-    const int fps = (CORE.Time.target > 0) ? (1.0 / CORE.Time.target) : 60;
+    const int fps = (CORE.Time.target > 0) ? (1.0/CORE.Time.target) : 60;
     // try to find an exact matching mode
     CORE.Window.modeIndex = FindExactConnectorMode(CORE.Window.connector, CORE.Window.screen.width, CORE.Window.screen.height, fps, allowInterlaced);
     // if nothing found, try to find a nearly matching mode
@@ -4361,7 +4428,7 @@ static bool InitGraphicsDevice(int width, int height)
 
         // Screen scaling matrix is required in case desired screen area is different than display area
         CORE.Window.screenScale = MatrixScale((float)fbWidth/CORE.Window.screen.width, (float)fbHeight/CORE.Window.screen.height, 1.0f);
-        
+
         // Mouse input scaling for the new screen size
         SetMouseScale((float)CORE.Window.screen.width/fbWidth, (float)CORE.Window.screen.height/fbHeight);
     #endif
@@ -4398,7 +4465,7 @@ static void SetupViewport(int width, int height)
     float xScale = 1.0f, yScale = 1.0f;
     glfwGetWindowContentScale(CORE.Window.handle, &xScale, &yScale);
     rlViewport(CORE.Window.renderOffset.x/2*xScale, CORE.Window.renderOffset.y/2*yScale, (CORE.Window.render.width - CORE.Window.renderOffset.x)*xScale, (CORE.Window.render.height - CORE.Window.renderOffset.y)*yScale);
-#else    
+#else
     rlViewport(CORE.Window.renderOffset.x/2, CORE.Window.renderOffset.y/2, CORE.Window.render.width - CORE.Window.renderOffset.x, CORE.Window.render.height - CORE.Window.renderOffset.y);
 #endif
 
@@ -4917,8 +4984,7 @@ static void WindowSizeCallback(GLFWwindow *window, int width, int height)
     CORE.Window.currentFbo.height = height;
     CORE.Window.resizedLastFrame = true;
 
-    if(IsWindowFullscreen())
-        return;
+    if (IsWindowFullscreen()) return;
 
     // Set current screen size
     CORE.Window.screen.width = width;
@@ -5190,7 +5256,7 @@ static void AndroidCommandCallback(struct android_app *app, int32_t cmd)
                     LoadFontDefault();
                     Rectangle rec = GetFontDefault().recs[95];
                     // NOTE: We setup a 1px padding on char rectangle to avoid pixel bleeding on MSAA filtering
-                    rlSetShapesTexture(GetFontDefault().texture, (Rectangle){ rec.x + 1, rec.y + 1, rec.width - 2, rec.height - 2 });
+                    SetShapesTexture(GetFontDefault().texture, (Rectangle){ rec.x + 1, rec.y + 1, rec.width - 2, rec.height - 2 });
                 #endif
 
                     // TODO: GPU assets reload in case of lost focus (lost context)
@@ -5383,59 +5449,6 @@ static int32_t AndroidInputCallback(struct android_app *app, AInputEvent *event)
 #endif
 
 #if defined(PLATFORM_WEB)
-// Register fullscreen change events
-static EM_BOOL EmscriptenFullscreenChangeCallback(int eventType, const EmscriptenFullscreenChangeEvent *event, void *userData)
-{
-    //isFullscreen: int event->isFullscreen
-    //fullscreenEnabled: int event->fullscreenEnabled
-    //fs element nodeName: (char *) event->nodeName
-    //fs element id: (char *) event->id
-    //Current element size: (int) event->elementWidth, (int) event->elementHeight
-    //Screen size:(int) event->screenWidth, (int) event->screenHeight
-/*
-    if (event->isFullscreen)
-    {
-        CORE.Window.fullscreen = true;
-        TRACELOG(LOG_INFO, "WEB: Canvas scaled to fullscreen. ElementSize: (%ix%i), ScreenSize(%ix%i)", event->elementWidth, event->elementHeight, event->screenWidth, event->screenHeight);
-    }
-    else
-    {
-        CORE.Window.fullscreen = false;
-        TRACELOG(LOG_INFO, "WEB: Canvas scaled to windowed. ElementSize: (%ix%i), ScreenSize(%ix%i)", event->elementWidth, event->elementHeight, event->screenWidth, event->screenHeight);
-    }
-
-    // TODO: Depending on scaling factor (screen vs element), calculate factor to scale mouse/touch input
-*/
-    return 0;
-}
-
-// Register keyboard input events
-static EM_BOOL EmscriptenKeyboardCallback(int eventType, const EmscriptenKeyboardEvent *keyEvent, void *userData)
-{
-    if ((eventType == EMSCRIPTEN_EVENT_KEYDOWN) && (keyEvent->keyCode == 27))  // ESCAPE key (strcmp(keyEvent->code, "Escape") == 0)
-    {
-        // WARNING: Not executed when pressing Esc to exit fullscreen, it seems document has priority over #canvas
-
-        emscripten_exit_pointerlock();
-        CORE.Window.fullscreen = false;
-        //TRACELOG(LOG_INFO, "CORE.Window.fullscreen = %s", CORE.Window.fullscreen? "true" : "false");
-    }
-
-    return 0;
-}
-
-// Register mouse input events
-static EM_BOOL EmscriptenMouseCallback(int eventType, const EmscriptenMouseEvent *mouseEvent, void *userData)
-{
-    // Lock mouse pointer when click on screen
-    if (eventType == EMSCRIPTEN_EVENT_CLICK)
-    {
-        // TODO: Manage mouse events if required (note that GLFW JS wrapper manages it now)
-    }
-
-    return 0;
-}
-
 // Register touch input events
 static EM_BOOL EmscriptenTouchCallback(int eventType, const EmscriptenTouchEvent *touchEvent, void *userData)
 {
@@ -5520,16 +5533,6 @@ static EM_BOOL EmscriptenGamepadCallback(int eventType, const EmscriptenGamepadE
     // TODO: Test gamepadEvent->index
 
     return 0;
-}
-
-static EM_BOOL EmscriptenWindowResizedCallback(int eventType, const void *reserved, void *userData)
-{
-    double width, height;
-    emscripten_get_element_css_size("canvas", &width, &height);
-
-    // TODO.
-
-    return true;
 }
 #endif
 
@@ -6111,11 +6114,11 @@ static void *EventThread(void *arg)
                 }
 
                 // Touchscreen tap
-                if(event.code == ABS_PRESSURE)
+                if (event.code == ABS_PRESSURE)
                 {
                     int previousMouseLeftButtonState = CORE.Input.Mouse.currentButtonStateEvdev[MOUSE_LEFT_BUTTON];
 
-                    if(!event.value && previousMouseLeftButtonState)
+                    if (!event.value && previousMouseLeftButtonState)
                     {
                         CORE.Input.Mouse.currentButtonStateEvdev[MOUSE_LEFT_BUTTON] = 0;
 
@@ -6125,7 +6128,7 @@ static void *EventThread(void *arg)
                         #endif
                     }
 
-                    if(event.value && !previousMouseLeftButtonState)
+                    if (event.value && !previousMouseLeftButtonState)
                     {
                         CORE.Input.Mouse.currentButtonStateEvdev[MOUSE_LEFT_BUTTON] = 1;
 

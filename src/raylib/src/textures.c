@@ -2852,8 +2852,8 @@ RenderTexture2D LoadRenderTexture(int width, int height)
         target.depth.mipmaps = 1;
 
         // Attach color texture and depth renderbuffer/texture to FBO
-        rlFramebufferAttach(target.id, target.texture.id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D);
-        rlFramebufferAttach(target.id, target.depth.id, RL_ATTACHMENT_DEPTH, RL_ATTACHMENT_RENDERBUFFER);
+        rlFramebufferAttach(target.id, target.texture.id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D, 0);
+        rlFramebufferAttach(target.id, target.depth.id, RL_ATTACHMENT_DEPTH, RL_ATTACHMENT_RENDERBUFFER, 0);
 
         // Check if fbo is complete with attachments (valid)
         if (rlFramebufferComplete(target.id)) TRACELOG(LOG_INFO, "FBO: [ID %i] Framebuffer object created successfully", target.id);
@@ -2948,12 +2948,6 @@ Image GetScreenData(void)
     image.data = rlReadScreenPixels(image.width, image.height);
 
     return image;
-}
-
-// Define default texture used to draw shapes
-void SetShapesTexture(Texture2D texture, Rectangle source)
-{
-    rlSetShapesTexture(texture, source);
 }
 
 //------------------------------------------------------------------------------------
@@ -3111,10 +3105,10 @@ void DrawTextureQuad(Texture2D texture, Vector2 tiling, Vector2 offset, Rectangl
 // NOTE: For tilling a whole texture DrawTextureQuad() is better
 void DrawTextureTiled(Texture2D texture, Rectangle source, Rectangle dest, Vector2 origin, float rotation, float scale, Color tint)
 {
-    if (texture.id <= 0 || scale <= 0.0f) return;  // Wanna see a infinite loop?!...just delete this line!
+    if ((texture.id <= 0) || (scale <= 0.0f)) return;  // Wanna see a infinite loop?!...just delete this line!
 
     int tileWidth = (int)(source.width*scale), tileHeight = (int)(source.height*scale);
-    if (dest.width < tileWidth && dest.height < tileHeight)
+    if ((dest.width < tileWidth) && (dest.height < tileHeight))
     {
         // Can fit only one tile
         DrawTexturePro(texture, (Rectangle){source.x, source.y, ((float)dest.width/tileWidth)*source.width, ((float)dest.height/tileHeight)*source.height},
@@ -3242,8 +3236,10 @@ void DrawTexturePro(Texture2D texture, Rectangle source, Rectangle dest, Vector2
             bottomRight.x = x + (dx + dest.width)*cosRotation - (dy + dest.height)*sinRotation;
             bottomRight.y = y + (dx + dest.width)*sinRotation + (dy + dest.height)*cosRotation;
         }
+        
+        rlCheckRenderBatchLimit(4);     // Make sure there is enough free space on the batch buffer
 
-        rlEnableTexture(texture.id);
+        rlSetTexture(texture.id);
         rlBegin(RL_QUADS);
 
             rlColor4ub(tint.r, tint.g, tint.b, tint.a);
@@ -3270,7 +3266,7 @@ void DrawTexturePro(Texture2D texture, Rectangle source, Rectangle dest, Vector2
             rlVertex2f(topRight.x, topRight.y);
 
         rlEnd();
-        rlDisableTexture();
+        rlSetTexture(0);
 
         // NOTE: Vertex position can be transformed using matrices
         // but the process is way more costly than just calculating
@@ -3278,7 +3274,7 @@ void DrawTexturePro(Texture2D texture, Rectangle source, Rectangle dest, Vector2
         // I leave here the old implementation for educational pourposes,
         // just in case someone wants to do some performance test
         /*
-        rlEnableTexture(texture.id);
+        rlSetTexture(texture.id);
         rlPushMatrix();
             rlTranslatef(dest.x, dest.y, 0.0f);
             if (rotation != 0.0f) rlRotatef(rotation, 0.0f, 0.0f, 1.0f);
@@ -3309,7 +3305,7 @@ void DrawTexturePro(Texture2D texture, Rectangle source, Rectangle dest, Vector2
                 rlVertex2f(dest.width, 0.0f);
             rlEnd();
         rlPopMatrix();
-        rlDisableTexture();
+        rlSetTexture(0);
         */
     }
 }
@@ -3372,7 +3368,7 @@ void DrawTextureNPatch(Texture2D texture, NPatchInfo nPatchInfo, Rectangle dest,
         coordD.x = (nPatchInfo.source.x + nPatchInfo.source.width)/width;
         coordD.y = (nPatchInfo.source.y + nPatchInfo.source.height)/height;
 
-        rlEnableTexture(texture.id);
+        rlSetTexture(texture.id);
 
         rlPushMatrix();
             rlTranslatef(dest.x, dest.y, 0.0f);
@@ -3506,8 +3502,41 @@ void DrawTextureNPatch(Texture2D texture, NPatchInfo nPatchInfo, Rectangle dest,
             rlEnd();
         rlPopMatrix();
 
-        rlDisableTexture();
+        rlSetTexture(0);
     }
+}
+
+// Draw textured polygon, defined by vertex and texturecoordinates
+// NOTE: Polygon center must have straight line path to all points
+// without crossing perimeter, points must be in anticlockwise order
+void DrawTexturePoly(Texture2D texture, Vector2 center, Vector2 *points, Vector2 *texcoords, int pointsCount, Color tint)
+{
+    rlCheckRenderBatchLimit((pointsCount - 1)*4);
+
+    rlSetTexture(texture.id);
+
+    // Texturing is only supported on QUADs
+    rlBegin(RL_QUADS);
+
+        rlColor4ub(tint.r, tint.g, tint.b, tint.a);
+
+        for (int i = 0; i < pointsCount - 1; i++)
+        {
+            rlTexCoord2f(0.5f, 0.5f);
+            rlVertex2f(center.x, center.y);
+
+            rlTexCoord2f(texcoords[i].x, texcoords[i].y);
+            rlVertex2f(points[i].x + center.x, points[i].y + center.y);
+
+            rlTexCoord2f(texcoords[i + 1].x, texcoords[i + 1].y);
+            rlVertex2f(points[i + 1].x + center.x, points[i + 1].y + center.y);
+
+            rlTexCoord2f(texcoords[i + 1].x, texcoords[i + 1].y);
+            rlVertex2f(points[i + 1].x + center.x, points[i + 1].y + center.y);
+        }
+    rlEnd();
+
+    rlSetTexture(0);
 }
 
 // Returns color with alpha applied, alpha goes from 0.0f to 1.0f
