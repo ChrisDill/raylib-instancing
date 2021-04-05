@@ -5,6 +5,7 @@
 ********************************************************************************************/
 
 #include "glad.h"
+#include "raylib/src/rlgl.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
@@ -55,8 +56,6 @@ int main(void)
 
     Shader shader = LoadShader("resources/shaders/quads_instanced.vs", "resources/shaders/quads_instanced.fs");
 
-    rlEnableDepthTest();
-
     // Generate a list of 100 quad locations/translation-vectors
     // These are in normalized device coordinates.
     // You need to convert them if using raylib functions to draw.
@@ -75,6 +74,11 @@ int main(void)
             index += 1;
         }
     }
+
+    // Configure instanced buffer
+    // -------------------------
+    RenderBatch batch = rlLoadRenderBatch(1, 8192);
+    batch.instances = 100;
 
     int loc = GetShaderLocation(shader, "offsets");
     SetShaderValueV(shader, loc, &translations, SHADER_UNIFORM_VEC2, 1);
@@ -108,35 +112,39 @@ int main(void)
 
         if (drawInstanced)
         {
-            // Draw instanced quads.
+            // Draw instanced quads
             BeginShaderMode(shader);
-            BeginModeInstanced(instanceCount);
-
-            rlViewport(0, 0, 1, 1);
+            rlSetRenderBatchActive(&batch);
+            // rlViewport(0, 0, 1, 1);
 
             Vector2 position = NormalizedToScreen((Vector2) { translations[0].x, translations[0].y });
-            DrawRectangleGradientEx((Rectangle) { position.x, position.y, size.x, size.y },
-            (Color) { 255, 0, 0, 255 },
-            (Color) { 0, 0, 255, 255 },
-            (Color) { 0, 255, 0, 255 },
-            (Color) { 0, 255, 255, 255 });
+            DrawRectangleGradientEx(
+                (Rectangle) { position.x, position.y, size.x, size.y },
+                (Color) { 255, 0, 0, 255 },
+                (Color) { 0, 0, 255, 255 },
+                (Color) { 0, 255, 0, 255 },
+                (Color) { 0, 255, 255, 255 }
+            );
 
-            rlViewport(0, 0, GetScreenWidth(), GetScreenHeight());
+            rlDrawRenderBatchActive();
 
-            EndModeInstanced();
+            // rlViewport(0, 0, GetScreenWidth(), GetScreenHeight());
+            rlSetRenderBatchActive(NULL);
             EndShaderMode();
         }
         else
         {
-            // Draw each quad in a loop. Convert normalized coords.
+            // Draw each quad in a loop(convert normalized coords)
             for (int i = 0; i < instanceCount; i += 1)
             {
                 Vector2 position = NormalizedToScreen((Vector2) { translations[i].x, translations[i].y });
-                DrawRectangleGradientEx((Rectangle) { position.x, position.y, size.x, size.y },
-                (Color) { 255, 0, 0, 255 },
-                (Color) { 0, 0, 255, 255 },
-                (Color) { 0, 255, 0, 255 },
-                (Color) { 0, 255, 255, 255 });
+                DrawRectangleGradientEx(
+                    (Rectangle) { position.x, position.y, size.x, size.y },
+                    (Color) { 255, 0, 0, 255 },
+                    (Color) { 0, 0, 255, 255 },
+                    (Color) { 0, 255, 0, 255 },
+                    (Color) { 0, 255, 255, 255 }
+                );
             }
         }
 

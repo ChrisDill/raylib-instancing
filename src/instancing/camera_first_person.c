@@ -92,15 +92,21 @@ Vector3 UpdateMovement(float speed, float dt)
         direction = Vector3Add(direction, Vector3Negate(Front));
     if (IsKeyDown(KEY_D))
         direction = Vector3Add(direction, Right);
+
+    if (IsKeyDown(KEY_SPACE))
+        direction = Vector3Add(direction, Up);
+    if (IsKeyDown(KEY_LEFT_SHIFT))
+        direction =  Vector3Add(direction, Vector3Negate(Up));
+
     return Vector3Scale(direction, speed * dt);
 }
 
 void UpdateCameraCustom(Camera* camera, Vector2 mouseDelta, float dt)
 {
     // Speed up/slow down.
-    if (IsKeyPressed(KEY_LEFT_SHIFT))
+    if (IsKeyPressed(KEY_LEFT_CONTROL))
         CurrentSpeed = MovementSpeed * 2.0f;
-    if (IsKeyReleased(KEY_LEFT_SHIFT))
+    if (IsKeyReleased(KEY_LEFT_CONTROL))
         CurrentSpeed = MovementSpeed;
 
     // Flying first person camera movement.

@@ -6,9 +6,10 @@
 
 #include "glad.h"
 #include "raylib.h"
-#include "raymath.h"
-#include "rlgl.h"
-#include <stdlib.h> // Required for: malloc(), free()
+#include "raylib/src/rlgl.h"
+
+// Required for: malloc(), free()
+#include <stdlib.h>
 
 #define MAX_PARTICLES 100000
 
@@ -39,34 +40,27 @@ int main(void)
 
     // Configure instanced array
     //--------------------------------------------------------------------------------------
-    unsigned int buffer;
-    glGenBuffers(1, &buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferData(GL_ARRAY_BUFFER, particleCount * sizeof(Particle), NULL, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    RenderBatch batch = rlLoadRenderBatch(1, 8192);
+    batch.instances = 100;
 
-    rlBindVAO();
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
+    rlEnableVertexArray(batch.vertexBuffer[0].vaoId);
+    int buffer = rlLoadVertexBuffer(&particles, particleCount * sizeof(Particle), true);
 
-    // Shader attribute locations.
-    int positionAttrib = glGetAttribLocation(shader.id, "ParticlePosition");
-    int colorAttrib = glGetAttribLocation(shader.id, "ParticleColor");
+    // Shader attribute locations
+    int positionAttrib = rlGetLocationAttrib(shader.id, "particlePosition");
+    int colorAttrib = rlGetLocationAttrib(shader.id, "particleColor");
 
-    // Particle positions.
-    // 2 x float = 2 x GL_FLOAT
-    glEnableVertexAttribArray(positionAttrib);
-    glVertexAttribPointer(positionAttrib, 2, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)0);
+    // instanced particle positions(2 x float = 2 x GL_FLOAT)
+    rlEnableVertexAttribute(positionAttrib);
+    rlSetVertexAttribute(positionAttrib, 2, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)0);
+    rlSetVertexAttributeDivisor(positionAttrib, 1);
 
-    // Particle colors.
-    // 4 x unsigned char = 4 x GL_UNSIGNED_BYTE
-    glEnableVertexAttribArray(colorAttrib);
-    glVertexAttribPointer(colorAttrib, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Particle), (void*)offsetof(Particle, color));
+    // instanced bunny colors(4 x unsigned char = 4 x GL_UNSIGNED_BYTE)
+    rlEnableVertexAttribute(colorAttrib);
+    rlSetVertexAttribute(colorAttrib, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Particle), (void*)offsetof(Particle, color));
+    rlSetVertexAttributeDivisor(colorAttrib, 1);
 
-    // Make attributes instanced.
-    glVertexAttribDivisor(positionAttrib, 1);
-    glVertexAttribDivisor(colorAttrib, 1);
-
-    glBindVertexArray(0);
+    rlDisableVertexArray();
 
     bool drawInstanced = true;
 
@@ -102,6 +96,8 @@ int main(void)
                         GetRandomValue(100, 240), 255 };
                     particles[particleCount].lifetime = (float)GetRandomValue(2, 10);
                     particleCount += 1;
+
+                    batch.instances = particleCount;
                 }
             }
         }
@@ -115,11 +111,13 @@ int main(void)
             particles[i].lifetime -= dt;
         }
 
-        // Re-upload particles array every frame to apply movement
         // @TODO look into moving movement into shader code.
+        // Re-upload particles array every frame to apply movement
         glBindBuffer(GL_ARRAY_BUFFER, buffer);
-        glBufferData(GL_ARRAY_BUFFER, particleCount * sizeof(Particle), &particles[0], GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, particleCount * sizeof(Particle), &particles[0], GL_DYNAMIC_DRAW);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // rlUpdateVertexBuffer(buffer, &bunnies[0], bunniesCount * sizeof(Bunny), 0);
+        // glBindBuffer(GL_ARRAY_BUFFER, 0);
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -130,9 +128,10 @@ int main(void)
         if (drawInstanced)
         {
             BeginShaderMode(shader);
-            BeginModeInstanced(particleCount);
+            rlSetRenderBatchActive(&batch);
             DrawTexture(texParticle, 0, 0, WHITE);
-            EndModeInstanced();
+            rlDrawRenderBatchActive();
+            rlSetRenderBatchActive(NULL);
             EndShaderMode();
         }
         else
@@ -167,7 +166,7 @@ int main(void)
 
     UnloadShader(shader);
 
-    CloseWindow(); // Close window and OpenGL context
+    CloseWindow(); // Close window and Openrl context
     //--------------------------------------------------------------------------------------
 
     return 0;

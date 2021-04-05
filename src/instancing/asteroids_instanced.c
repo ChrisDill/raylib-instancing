@@ -7,7 +7,6 @@
  *
  ********************************************************************************************/
 
-#include "external/glad.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
@@ -36,7 +35,7 @@ int main(void)
     Model planet = LoadModel("resources/objects/planet/planet.obj");
     Model rock = LoadModel("resources/objects/rock/rock.obj");
 
-    // Generate a large list of semi-random model transformation matrices.
+    // Generate a large list of semi-random model transformation matrices
     //--------------------------------------------------------------------------------------
     unsigned int asteroidCount = 50000;
     Matrix* modelMatrices = (Matrix*)RL_CALLOC(asteroidCount, sizeof(Matrix));
@@ -51,8 +50,7 @@ int main(void)
     {
         Matrix model = MatrixIdentity();
 
-        // 1. Translation: displace along circle with 'radius' in range [-offset,
-        // offset].
+        // 1. Translation: displace along circle with 'radius' in range [-offset, offset]
         float angle = (float)i / (float)asteroidCount * 360.0f;
 
         float displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
@@ -60,66 +58,27 @@ int main(void)
         float x = sin(angle) * radius + displacement;
         displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
 
-        // Keep height of rock field smaller compared to width of x and z.
-        float y = displacement * 0.4f;
+        // Keep height of rock field smaller compared to width of x and z
+        float y = displacement * 0.5f;
         displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
 
         float z = cos(angle) * radius + displacement;
         Matrix matTranslation = MatrixTranslate(x, y, z);
 
-        // 2. Scale: Scale between 0.05 and 0.25f.
+        // 2. Scale: Scale between 0.05 and 0.25f
         float scale = (rand() % 20) / 100.0f + 0.05;
         Matrix matScale = MatrixScale(scale, scale, scale);
 
-        // 3. Rotation: add random rotation around a (semi)randomly picked rotation
-        // axis vector.
+        // 3. Rotation: add random rotation around a (semi)randomly picked rotation axis vector
         float rotAngle = (rand() % 360);
         Matrix matRotation = MatrixRotate((Vector3) { 0.4f, 0.6f, 0.8f }, rotAngle);
 
         model = MatrixMultiply(model, matTranslation);
         model = MatrixMultiply(matRotation, model);
         model = MatrixMultiply(matScale, model);
-        // Matrix transposeModel = MatrixTranspose(model);
 
-        // 4. Now add to list of matrices.
+        // 4. Now add to list of matrices
         modelMatrices[i] = model;
-    }
-
-    // Configure instanced array.
-    //--------------------------------------------------------------------------------------
-    unsigned int buffer;
-    glGenBuffers(1, &buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferData(GL_ARRAY_BUFFER, asteroidCount * sizeof(Matrix),
-    &modelMatrices[0], GL_STATIC_DRAW);
-
-    // Set transformation matrices as an instance vertex attribute (with divisor
-    // 1).
-    //--------------------------------------------------------------------------------------
-    for (unsigned int i = 0; i < rock.meshCount; i += 1)
-    {
-        unsigned int vao = rock.meshes[i].vaoId;
-        glBindVertexArray(vao);
-
-        // Set attribute pointers for matrix (4 times sizeof Vector4).
-        glEnableVertexAttribArray(8);
-        glVertexAttribPointer(8, 4, GL_FLOAT, GL_FALSE, sizeof(Matrix), (void*)0);
-        glEnableVertexAttribArray(9);
-        glVertexAttribPointer(9, 4, GL_FLOAT, GL_FALSE, sizeof(Matrix),
-        (void*)(sizeof(Vector4)));
-        glEnableVertexAttribArray(10);
-        glVertexAttribPointer(10, 4, GL_FLOAT, GL_FALSE, sizeof(Matrix),
-        (void*)(2 * sizeof(Vector4)));
-        glEnableVertexAttribArray(11);
-        glVertexAttribPointer(11, 4, GL_FLOAT, GL_FALSE, sizeof(Matrix),
-        (void*)(3 * sizeof(Vector4)));
-
-        glVertexAttribDivisor(8, 1);
-        glVertexAttribDivisor(9, 1);
-        glVertexAttribDivisor(10, 1);
-        glVertexAttribDivisor(11, 1);
-
-        glBindVertexArray(0);
     }
 
     bool drawInstanced = true;
@@ -127,7 +86,7 @@ int main(void)
 
     // Define the camera to look into our 3d world
     Camera3D camera = { 0 };
-    camera.position = (Vector3) { 0.0f, 0.0f, 155.0f };
+    camera.position = (Vector3) { 0.0f, 14.0f, 240.0f };
     camera.target = (Vector3) { 0.0f, 0.0f, 0.0f };
     camera.up = (Vector3) { 0.0f, 1.0f, 0.0f };
     camera.fovy = 45.0f;
@@ -152,19 +111,22 @@ int main(void)
     {
         // Update
         //----------------------------------------------------------------------------------
+        float dt = GetFrameTime();
         if (!paused)
         {
-            // Track Mouse movement.
+            // Track mouse movement
             mousePosition = GetMousePosition();
             Vector2 mouseDelta = Vector2Subtract(mousePosition, mouseLastPosition);
             mouseLastPosition = mousePosition;
 
-            UpdateCameraCustom(&camera, mouseDelta, GetFrameTime());
+            UpdateCameraCustom(&camera, mouseDelta, dt);
+
+            angle += 0.3f * dt;
         }
 
         if (IsKeyPressed(KEY_R))
         {
-            camera.position = (Vector3) { 0.0f, 0.0f, 155.0f };
+            camera.position = (Vector3) { 0.0f, 14.0f, 240.0f };
             camera.target = (Vector3) { 0.0f, 0.0f, 0.0f };
             camera.up = (Vector3) { 0.0f, 1.0f, 0.0f };
         }
@@ -200,8 +162,11 @@ int main(void)
 
         BeginMode3D(camera);
 
+        rlPushMatrix();
+        rlRotatef(angle, 0, 1, 0);
+
         Vector3 axis = { 0.0f, 0.0f, 1.0f };
-        Vector3 scale = { 4.0f, 4.0f, 4.0f };
+        Vector3 scale = { 5.0f, 5.0f, 5.0f };
         DrawModelEx(planet, Vector3Zero(), axis, angle, scale, WHITE);
 
         // Draw all asteroids at once.
@@ -209,10 +174,9 @@ int main(void)
         // @NOTE: Each mesh is currently a seperate draw call.
         if (drawInstanced)
         {
-            // rock.transform = MatrixIdentity();
-            // DrawModel(rock, Vector3Zero(), 1.0f, WHITE);
+            rock.transform = MatrixIdentity(); 
             rock.materials[0].shader = rockShader;
-            rlDrawMeshInstanced(rock.meshes[0], rock.materials[0], modelMatrices, asteroidCount);
+            DrawMeshInstanced(rock.meshes[0], rock.materials[0], modelMatrices, asteroidCount);
         }
         // Draw each asteroid one at a time.
         else
@@ -224,6 +188,8 @@ int main(void)
                 DrawModel(rock, Vector3Zero(), 1.0f, WHITE);
             }
         }
+
+        rlPopMatrix();
 
         EndMode3D();
 

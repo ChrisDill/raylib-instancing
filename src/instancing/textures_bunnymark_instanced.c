@@ -8,11 +8,14 @@
 
 #include "glad.h"
 #include "raylib.h"
-#include "rlgl.h"
+#include "raylib/src/rlgl.h"
 #include <stddef.h>
-#include <stdlib.h> // Required for: malloc(), free()
 
-#define MAX_BUNNIES 500000 // 500K bunnies limit with instancing!
+// Required for: malloc(), free()
+#include <stdlib.h>
+
+// 500K bunnies limit with instancing!
+#define MAX_BUNNIES 500000
 
 // This is the maximum amount of elements (quads) per batch
 // NOTE: This value is defined in [rlgl] module and can be changed there
@@ -41,38 +44,31 @@ int main(void)
 
     // Bunnies array
     Bunny* bunnies = (Bunny*)RL_CALLOC(MAX_BUNNIES, sizeof(Bunny));
-    int bunniesCount = 0; // Bunnies counter
+    int bunniesCount = 0;
 
-    // Configure instanced array
+    // Configure instanced buffer
     // -------------------------
-    unsigned int buffer;
-    glGenBuffers(1, &buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferData(GL_ARRAY_BUFFER, bunniesCount * sizeof(Bunny), NULL, GL_STATIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    RenderBatch batch = rlLoadRenderBatch(1, 8192);
+    batch.instances = bunniesCount;
 
-    rlBindVAO();
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
+    rlEnableVertexArray(batch.vertexBuffer[0].vaoId);
+    int buffer = rlLoadVertexBuffer(&bunnies, bunniesCount * sizeof(Bunny), true);;
 
     // Shader attribute locations
-    int positionAttrib = glGetAttribLocation(shader.id, "bunnyPosition");
-    int colorAttrib = glGetAttribLocation(shader.id, "bunnyColor");
+    int positionAttrib = rlGetLocationAttrib(shader.id, "bunnyPosition");
+    int colorAttrib = rlGetLocationAttrib(shader.id, "bunnyColor");
 
-    // Bunny positions
-    // 2 x float = 2 x GL_FLOAT
-    glEnableVertexAttribArray(positionAttrib);
-    glVertexAttribPointer(positionAttrib, 2, GL_FLOAT, GL_FALSE, sizeof(Bunny), (void*)0);
+    // instanced bunny positions(2 x float = 2 x GL_FLOAT)
+    rlEnableVertexAttribute(positionAttrib);
+    rlSetVertexAttribute(positionAttrib, 2, GL_FLOAT, GL_FALSE, sizeof(Bunny), (void*)0);
+    rlSetVertexAttributeDivisor(positionAttrib, 1);
 
-    // Bunny colors
-    // 4 x unsigned char = 4 x GL_UNSIGNED_BYTE
-    glEnableVertexAttribArray(colorAttrib);
-    glVertexAttribPointer(colorAttrib, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Bunny), (void*)offsetof(Bunny, color));
+    // instanced bunny colors(4 x unsigned char = 4 x GL_UNSIGNED_BYTE)
+    rlEnableVertexAttribute(colorAttrib);
+    rlSetVertexAttribute(colorAttrib, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Bunny), (void*)offsetof(Bunny, color));
+    rlSetVertexAttributeDivisor(colorAttrib, 1);
 
-    // Make attributes instanced
-    glVertexAttribDivisor(positionAttrib, 1);
-    glVertexAttribDivisor(colorAttrib, 1);
-
-    glBindVertexArray(0);
+    rlDisableVertexArray();
 
     bool drawInstanced = false;
 
@@ -99,10 +95,14 @@ int main(void)
                     bunnies[bunniesCount].position = GetMousePosition();
                     bunnies[bunniesCount].speed.x = (float)GetRandomValue(-250, 250) / 60.0f;
                     bunnies[bunniesCount].speed.y = (float)GetRandomValue(-250, 250) / 60.0f;
-                    bunnies[bunniesCount].color = (Color) { GetRandomValue(50, 240),
+                    bunnies[bunniesCount].color = (Color) {
+                        GetRandomValue(50, 240),
                         GetRandomValue(80, 240),
-                        GetRandomValue(100, 240), 255 };
+                        GetRandomValue(100, 240), 255
+                    };
                     bunniesCount++;
+
+                    batch.instances = bunniesCount;
                 }
             }
         }
@@ -113,16 +113,19 @@ int main(void)
             bunnies[i].position.x += bunnies[i].speed.x;
             bunnies[i].position.y += bunnies[i].speed.y;
 
-            if (((bunnies[i].position.x + texBunny.width / 2) > GetScreenWidth()) || ((bunnies[i].position.x + texBunny.width / 2) < 0))
+            Vector2 center = Vector2Add(bunnies[i].position, (Vector2){ texBunny.width / 2, texBunny.height / 2});
+            if (center.x > GetScreenWidth() || center.x < 0)
                 bunnies[i].speed.x *= -1;
-            if (((bunnies[i].position.y + texBunny.height / 2) > GetScreenHeight()) || ((bunnies[i].position.y + texBunny.height / 2 - 40) < 0))
+            if (center.y > GetScreenHeight() || center.y - 40 < 0)
                 bunnies[i].speed.y *= -1;
         }
 
         // Re-upload bunnies array every frame to apply movement
         glBindBuffer(GL_ARRAY_BUFFER, buffer);
-        glBufferData(GL_ARRAY_BUFFER, bunniesCount * sizeof(Bunny), &bunnies[0], GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, bunniesCount * sizeof(Bunny), &bunnies[0], GL_DYNAMIC_DRAW);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // rlUpdateVertexBuffer(buffer, &bunnies[0], bunniesCount * sizeof(Bunny), 0);
+        // glBindBuffer(GL_ARRAY_BUFFER, 0);
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -133,10 +136,10 @@ int main(void)
         if (drawInstanced)
         {
             BeginShaderMode(shader);
-            BeginModeInstanced(bunniesCount);
+            rlSetRenderBatchActive(&batch);
             DrawTexture(texBunny, 0, 0, WHITE);
             rlDrawRenderBatchActive();
-            EndModeInstanced();
+            rlSetRenderBatchActive(NULL);
             EndShaderMode();
         }
         else

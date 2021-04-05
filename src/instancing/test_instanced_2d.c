@@ -6,9 +6,10 @@
 
 #include "glad.h"
 #include "raylib.h"
-#include "raymath.h"
-#include "rlgl.h"
-#include <stdlib.h> // Required for: malloc(), free()
+#include "raylib/src/rlgl.h"
+
+// Required for: malloc(), free()
+#include <stdlib.h>
 
 typedef enum InstanceCommand {
     INSTANCE_LINE,
@@ -84,6 +85,11 @@ int main(void)
     unsigned int instanceCount = 200;
     Matrix* modelMatrices = (Matrix*)RL_CALLOC(instanceCount, sizeof(Matrix));
 
+    // Configure instanced buffer
+    // -------------------------
+    RenderBatch batch = rlLoadRenderBatch(1, 8192);
+    batch.instances = 100;
+
     bool drawInstanced = false;
 
     // 2D camera mode
@@ -146,7 +152,6 @@ int main(void)
             camera.offset = (Vector2) { 0, 50 };
             camera.rotation = 0.0f;
             camera.zoom = 1.0f;
-
             instanceCount = 20;
         }
         //----------------------------------------------------------------------------------
@@ -163,13 +168,14 @@ int main(void)
 
         if (drawInstanced)
         {
-            BeginModeInstanced(instanceCount);
+            batch.instances = instanceCount;
+            rlSetRenderBatchActive(&batch);
 
             BeginShaderMode(instanceShader);
             DrawCommand(command, texture, BLUE);
             EndShaderMode();
 
-            EndModeInstanced();
+            rlSetRenderBatchActive(NULL);
         }
         else
         {

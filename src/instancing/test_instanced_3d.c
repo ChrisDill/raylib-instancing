@@ -6,8 +6,7 @@
 
 #include "glad.h"
 #include "raylib.h"
-#include "raymath.h"
-#include "rlgl.h"
+#include "raylib/src/rlgl.h"
 
 // Required for: malloc(), free()
 #include <stdlib.h>
@@ -73,8 +72,13 @@ int main(void)
 
     // Generate a large list of semi-random model transformation matrices
     // ------------------------------------------------------------------
-    unsigned int amount = 20;
-    Matrix* modelMatrices = (Matrix*)RL_CALLOC(amount, sizeof(Matrix));
+    unsigned int instanceCount = 20;
+    Matrix* modelMatrices = (Matrix*)RL_CALLOC(instanceCount, sizeof(Matrix));
+
+    // Configure instanced buffer
+    // -------------------------
+    RenderBatch batch = rlLoadRenderBatch(1, 8192);
+    batch.instances = 100;
 
     bool drawInstanced = true;
     bool paused = false;
@@ -132,11 +136,11 @@ int main(void)
 
         if (IsKeyPressed(KEY_W))
         {
-            amount += 1;
+            instanceCount += 1;
         }
         if (IsKeyPressed(KEY_S))
         {
-            amount -= 1;
+            instanceCount -= 1;
         }
 
         if (IsKeyPressed(KEY_LEFT))
@@ -169,11 +173,14 @@ int main(void)
 
         if (drawInstanced)
         {
-            BeginModeInstanced(amount);
+            batch.instances = instanceCount;
+            rlSetRenderBatchActive(&batch);
+
             BeginShaderMode(instancedShader);
             DrawCommand(command, model, WHITE);
             EndShaderMode();
-            EndModeInstanced();
+
+            rlSetRenderBatchActive(&batch);
         }
         else
         {
@@ -183,7 +190,7 @@ int main(void)
         EndMode3D();
 
         DrawRectangle(0, 0, screenWidth, 40, BLACK);
-        DrawText(FormatText("models: %i", amount), 120, 10, 20, GREEN);
+        DrawText(FormatText("models: %i", instanceCount), 120, 10, 20, GREEN);
         DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
 
         DrawFPS(10, 10);
