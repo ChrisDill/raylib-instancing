@@ -1,6 +1,6 @@
 /**********************************************************************************************
 *
-*   rlgl v3.5 - raylib OpenGL abstraction layer
+*   rlgl v3.7 - raylib OpenGL abstraction layer
 *
 *   rlgl is a wrapper for multiple OpenGL versions (1.1, 2.1, 3.3 Core, ES 2.0) to
 *   pseudo-OpenGL 1.1 style functions (rlVertex, rlTranslate, rlRotate...).
@@ -578,11 +578,8 @@ RLAPI int rlGetVersion(void);                         // Returns current OpenGL 
 RLAPI int rlGetFramebufferWidth(void);                // Get default framebuffer width
 RLAPI int rlGetFramebufferHeight(void);               // Get default framebuffer height
 
-RLAPI Shader rlGetShaderDefault(void);                                    // Get default shader
-RLAPI Texture2D rlGetTextureDefault(void);                                // Get default texture
-RLAPI Texture2D rlGetShapesTexture(void);                                 // Get texture to draw shapes
-RLAPI Rectangle rlGetShapesTextureRec(void);                              // Get texture rectangle to draw shapes
-RLAPI void rlSetShapesTexture(Texture2D texture, Rectangle source);       // Define default texture used to draw shapes
+RLAPI Shader rlGetShaderDefault(void);                // Get default shader
+RLAPI Texture2D rlGetTextureDefault(void);            // Get default texture
 
 // Render batch management
 // NOTE: rlgl provides a default render batch to behave like OpenGL 1.1 immediate mode
@@ -841,8 +838,6 @@ typedef struct rlglData {
         Matrix stack[MAX_MATRIX_STACK_SIZE];// Matrix stack for push/pop
         int stackCounter;                   // Matrix stack counter
 
-        Texture2D shapesTexture;            // Texture used on shapes drawing (usually a white pixel)
-        Rectangle shapesTextureRec;         // Texture source rectangle used on shapes drawing
         unsigned int defaultTextureId;      // Default texture used on shapes/poly drawing (required by shader)
         unsigned int activeTextureId[MAX_BATCH_ACTIVE_TEXTURES];    // Active texture ids to be enabled on batch drawing (0 active by default)
         unsigned int defaultVShaderId;      // Default vertex shader id (used by default shader program)
@@ -907,8 +902,8 @@ static PFNGLVERTEXATTRIBDIVISOREXTPROC glVertexAttribDivisor = NULL;
 // Module specific Functions Declaration
 //----------------------------------------------------------------------------------
 #if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
-static Shader rlLoadShaderDefault(void);    // Load default shader (just vertex positioning and texture coloring)
-static void rlUnloadShaderDefault(void);    // Unload default shader
+static void rlLoadShaderDefault(void);      // Load default shader (RLGL.State.defaultShader)
+static void rlUnloadShaderDefault(void);    // Unload default shader (RLGL.State.defaultShader)
 #endif  // GRAPHICS_API_OPENGL_33 || GRAPHICS_API_OPENGL_ES2
 #if defined(GRAPHICS_API_OPENGL_11)
 static int rlGenerateMipmapsData(unsigned char *data, int baseWidth, int baseHeight);   // Generate mipmaps data on CPU side
@@ -1822,7 +1817,7 @@ void rlglInit(int width, int height)
     else TRACELOG(LOG_WARNING, "TEXTURE: Failed to load default texture");
 
     // Init default Shader (customized for GL 3.3 and ES2)
-    RLGL.State.defaultShader = rlLoadShaderDefault();
+    rlLoadShaderDefault(); // RLGL.State.defaultShader
     RLGL.State.currentShader = RLGL.State.defaultShader;
 
     // Init default vertex arrays buffers
@@ -1871,10 +1866,6 @@ void rlglInit(int width, int height)
     // Store screen size into global variables
     RLGL.State.framebufferWidth = width;
     RLGL.State.framebufferHeight = height;
-
-    // Init texture and rectangle used on basic shapes drawing
-    RLGL.State.shapesTexture = rlGetTextureDefault();
-    RLGL.State.shapesTextureRec = (Rectangle){ 0.0f, 0.0f, 1.0f, 1.0f };
 
     TRACELOG(LOG_INFO, "RLGL: Default state initialized successfully");
 #endif
@@ -1986,37 +1977,6 @@ Texture2D rlGetTextureDefault(void)
     texture.format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
 #endif
     return texture;
-}
-
-// Get texture to draw shapes
-Texture2D rlGetShapesTexture(void)
-{
-#if defined(GRAPHICS_API_OPENGL_11)
-    Texture2D texture = { 0 };
-    return texture;
-#else
-    return RLGL.State.shapesTexture;
-#endif
-}
-
-// Get texture rectangle to draw shapes
-Rectangle rlGetShapesTextureRec(void)
-{
-#if defined(GRAPHICS_API_OPENGL_11)
-    Rectangle rec = { 0 };
-    return rec;
-#else
-    return RLGL.State.shapesTextureRec;
-#endif
-}
-
-// Define default texture used to draw shapes
-void rlSetShapesTexture(Texture2D texture, Rectangle source)
-{
-#if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
-    RLGL.State.shapesTexture = texture;
-    RLGL.State.shapesTextureRec = source;
-#endif
 }
 
 // Render batch management
@@ -2889,7 +2849,7 @@ void *rlReadTexturePixels(Texture2D texture)
 
 #if defined(GRAPHICS_API_OPENGL_ES2)
     // glGetTexImage() is not available on OpenGL ES 2.0
-    // Texture2D width and height are required on OpenGL ES 2.0. There is no way to get it from texture id.
+    // Texture width and height are required on OpenGL ES 2.0. There is no way to get it from texture id.
     // Two possible Options:
     // 1 - Bind texture to color fbo attachment and glReadPixels()
     // 2 - Create an fbo, activate it, render quad with texture, glReadPixels()
@@ -3626,6 +3586,7 @@ void rlSetMatrixViewOffsetStereo(Matrix right, Matrix left)
 // Load and draw a 1x1 XY quad in NDC
 void rlLoadDrawQuad(void)
 {
+#if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
     unsigned int quadVAO = 0;
     unsigned int quadVBO = 0;
 
@@ -3660,11 +3621,13 @@ void rlLoadDrawQuad(void)
     // Delete buffers (VBO and VAO)
     glDeleteBuffers(1, &quadVBO);
     glDeleteVertexArrays(1, &quadVAO);
+#endif
 }
 
 // Load and draw a 1x1 3D cube in NDC
 void rlLoadDrawCube(void)
 {
+#if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
     unsigned int cubeVAO = 0;
     unsigned int cubeVBO = 0;
 
@@ -3736,6 +3699,7 @@ void rlLoadDrawCube(void)
     // Delete VBO and VAO
     glDeleteBuffers(1, &cubeVBO);
     glDeleteVertexArrays(1, &cubeVAO);
+#endif
 }
 
 //----------------------------------------------------------------------------------
@@ -3744,13 +3708,13 @@ void rlLoadDrawCube(void)
 #if defined(GRAPHICS_API_OPENGL_33) || defined(GRAPHICS_API_OPENGL_ES2)
 // Load default shader (just vertex positioning and texture coloring)
 // NOTE: This shader program is used for internal buffers
-static Shader rlLoadShaderDefault(void)
+// NOTE: It uses global variable: RLGL.State.defaultShader
+static void rlLoadShaderDefault(void)
 {
-    Shader shader = { 0 };
-    shader.locs = (int *)RL_CALLOC(MAX_SHADER_LOCATIONS, sizeof(int));
+    RLGL.State.defaultShader.locs = (int *)RL_CALLOC(MAX_SHADER_LOCATIONS, sizeof(int));
 
     // NOTE: All locations must be reseted to -1 (no location)
-    for (int i = 0; i < MAX_SHADER_LOCATIONS; i++) shader.locs[i] = -1;
+    for (int i = 0; i < MAX_SHADER_LOCATIONS; i++) RLGL.State.defaultShader.locs[i] = -1;
 
     // Vertex shader directly defined, no external file required
     const char *defaultVShaderStr =
@@ -3820,28 +3784,27 @@ static Shader rlLoadShaderDefault(void)
     RLGL.State.defaultVShaderId = rlCompileShader(defaultVShaderStr, GL_VERTEX_SHADER);     // Compile default vertex shader
     RLGL.State.defaultFShaderId = rlCompileShader(defaultFShaderStr, GL_FRAGMENT_SHADER);   // Compile default fragment shader
 
-    shader.id = rlLoadShaderProgram(RLGL.State.defaultVShaderId, RLGL.State.defaultFShaderId);
+    RLGL.State.defaultShader.id = rlLoadShaderProgram(RLGL.State.defaultVShaderId, RLGL.State.defaultFShaderId);
 
-    if (shader.id > 0)
+    if (RLGL.State.defaultShader.id > 0)
     {
-        TRACELOG(LOG_INFO, "SHADER: [ID %i] Default shader loaded successfully", shader.id);
+        TRACELOG(LOG_INFO, "SHADER: [ID %i] Default shader loaded successfully", RLGL.State.defaultShader.id);
 
         // Set default shader locations: attributes locations
-        shader.locs[SHADER_LOC_VERTEX_POSITION] = glGetAttribLocation(shader.id, "vertexPosition");
-        shader.locs[SHADER_LOC_VERTEX_TEXCOORD01] = glGetAttribLocation(shader.id, "vertexTexCoord");
-        shader.locs[SHADER_LOC_VERTEX_COLOR] = glGetAttribLocation(shader.id, "vertexColor");
+        RLGL.State.defaultShader.locs[SHADER_LOC_VERTEX_POSITION] = glGetAttribLocation(RLGL.State.defaultShader.id, "vertexPosition");
+        RLGL.State.defaultShader.locs[SHADER_LOC_VERTEX_TEXCOORD01] = glGetAttribLocation(RLGL.State.defaultShader.id, "vertexTexCoord");
+        RLGL.State.defaultShader.locs[SHADER_LOC_VERTEX_COLOR] = glGetAttribLocation(RLGL.State.defaultShader.id, "vertexColor");
 
         // Set default shader locations: uniform locations
-        shader.locs[SHADER_LOC_MATRIX_MVP]  = glGetUniformLocation(shader.id, "mvp");
-        shader.locs[SHADER_LOC_COLOR_DIFFUSE] = glGetUniformLocation(shader.id, "colDiffuse");
-        shader.locs[SHADER_LOC_MAP_DIFFUSE] = glGetUniformLocation(shader.id, "texture0");
+        RLGL.State.defaultShader.locs[SHADER_LOC_MATRIX_MVP]  = glGetUniformLocation(RLGL.State.defaultShader.id, "mvp");
+        RLGL.State.defaultShader.locs[SHADER_LOC_COLOR_DIFFUSE] = glGetUniformLocation(RLGL.State.defaultShader.id, "colDiffuse");
+        RLGL.State.defaultShader.locs[SHADER_LOC_MAP_DIFFUSE] = glGetUniformLocation(RLGL.State.defaultShader.id, "texture0");
     }
-    else TRACELOG(LOG_WARNING, "SHADER: [ID %i] Failed to load default shader", shader.id);
-
-    return shader;
+    else TRACELOG(LOG_WARNING, "SHADER: [ID %i] Failed to load default shader", RLGL.State.defaultShader.id);
 }
 
 // Unload default shader
+// NOTE: It uses global variable: RLGL.State.defaultShader
 static void rlUnloadShaderDefault(void)
 {
     glUseProgram(0);
