@@ -7,11 +7,10 @@
 #include "glad.h"
 #include "raylib.h"
 #include "raylib/src/rlgl.h"
+#include "camera_first_person.h"
 
 // Required for: malloc(), free()
 #include <stdlib.h>
-
-#include "camera_first_person.c"
 
 typedef enum InstanceCommand {
     INSTANCE_LINE,
@@ -85,15 +84,8 @@ int main(void)
     int command = INSTANCE_TRIANGLE;
 
     // Define the camera to look into our 3d world
-    Camera3D camera = { 0 };
-    camera.position = (Vector3) { 0.0f, 30.0f, 100.0f }; // Camera position
-    camera.target = (Vector3) { 0.0f, 0.0f, 0.0f };      // Camera looking at point
-    camera.up = (Vector3) { 0.0f, 1.0f, 0.0f };          // Camera up vector (rotation towards target)
-    camera.fovy = 45.0f;                                 // Camera field-of-view Y
-    camera.projection = CAMERA_PERSPECTIVE;                    // Camera mode type
-
-    SetCameraMode(camera, CAMERA_CUSTOM); // Set a free camera mode
-    Load3DCamera();
+    CameraFP camera = LoadCameraFP((Vector3) { 0.0f, 14.0f, 240.0f });
+    camera.view.position = (Vector3) { 0.0f, 30.0f, 100.0f };
 
     Vector2 mousePosition = GetMousePosition();
     Vector2 mouseLastPosition = mousePosition;
@@ -118,8 +110,7 @@ int main(void)
             Vector2 mouseDelta = Vector2Subtract(mousePosition, mouseLastPosition);
             mouseLastPosition = mousePosition;
 
-            UpdateCamera(&camera); // Update camera
-            if (camera.projection == CAMERA_CUSTOM)
+            if (camera.view.projection == CAMERA_CUSTOM)
             {
                 UpdateCameraCustom(&camera, mouseDelta, GetFrameTime());
             }
@@ -167,7 +158,7 @@ int main(void)
         BeginDrawing();
         ClearBackground(BLACK);
 
-        BeginMode3D(camera);
+        BeginMode3D(camera.view);
 
         DrawGrid(20, 30.0f);
 

@@ -10,11 +10,9 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
-
+#include "camera_first_person.h"
 // Required for: calloc(), free()
 #include <stdlib.h>
-
-#include "camera_first_person.c"
 
 int main(void)
 {
@@ -40,7 +38,7 @@ int main(void)
     unsigned int asteroidCount = 50000;
     Matrix* modelMatrices = (Matrix*)RL_CALLOC(asteroidCount, sizeof(Matrix));
 
-    // Initialize random seed.
+    // Initialize random seed
     srand(GetTime());
 
     float radius = 150.0;
@@ -85,16 +83,8 @@ int main(void)
     bool paused = false;
 
     // Define the camera to look into our 3d world
-    Camera3D camera = { 0 };
-    camera.position = (Vector3) { 0.0f, 14.0f, 240.0f };
-    camera.target = (Vector3) { 0.0f, 0.0f, 0.0f };
-    camera.up = (Vector3) { 0.0f, 1.0f, 0.0f };
-    camera.fovy = 45.0f;
-    camera.projection = CAMERA_PERSPECTIVE;
-
-    // Custom first person camera.
-    SetCameraMode(camera, CAMERA_CUSTOM);
-    Load3DCamera();
+    CameraFP camera = LoadCameraFP();
+    camera.view.position = (Vector3) { 0.0f, 14.0f, 240.0f };
 
     Vector2 mousePosition = GetMousePosition();
     Vector2 mouseLastPosition = mousePosition;
@@ -120,14 +110,13 @@ int main(void)
             mouseLastPosition = mousePosition;
 
             UpdateCameraCustom(&camera, mouseDelta, dt);
-
             angle += 0.3f * dt;
         }
 
         if (IsKeyPressed(KEY_R))
         {
-            camera.position = (Vector3) { 0.0f, 14.0f, 240.0f };
-            camera.target = (Vector3) { 0.0f, 0.0f, 0.0f };
+            camera.view.position = (Vector3) { 0.0f, 14.0f, 240.0f };
+            camera.view.target = (Vector3) { 0.0f, 0.0f, 0.0f };
             camera.up = (Vector3) { 0.0f, 1.0f, 0.0f };
         }
 
@@ -160,7 +149,7 @@ int main(void)
         BeginDrawing();
         ClearBackground((Color) { 26, 26, 26, 255 });
 
-        BeginMode3D(camera);
+        BeginMode3D(camera.view);
 
         rlPushMatrix();
         rlRotatef(angle, 0, 1, 0);
@@ -169,16 +158,15 @@ int main(void)
         Vector3 scale = { 5.0f, 5.0f, 5.0f };
         DrawModelEx(planet, Vector3Zero(), axis, angle, scale, WHITE);
 
-        // Draw all asteroids at once.
-        // 1 draw call is made per mesh in the model.
-        // @NOTE: Each mesh is currently a seperate draw call.
+        // Draw all asteroids at once
+        // 1 draw call is made per mesh in the model
         if (drawInstanced)
         {
-            rock.transform = MatrixIdentity(); 
+            rock.transform = MatrixIdentity();
             rock.materials[0].shader = rockShader;
             DrawMeshInstanced(rock.meshes[0], rock.materials[0], modelMatrices, asteroidCount);
         }
-        // Draw each asteroid one at a time.
+        // Draw each asteroid one at a time
         else
         {
             rock.materials[0].shader = rlGetShaderDefault();
