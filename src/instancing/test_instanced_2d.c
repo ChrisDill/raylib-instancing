@@ -11,53 +11,61 @@
 // Required for: malloc(), free()
 #include <stdlib.h>
 
-typedef enum InstanceCommand {
-    INSTANCE_LINE,
-    INSTANCE_TRIANGLE,
-    INSTANCE_TRIANGLE_LINE,
-    INSTANCE_RECTANGLE,
-    INSTANCE_RECTANGLE_LINE,
-    INSTANCE_CIRCLE,
-    INSTANCE_CIRCLE_LINE,
-    INSTANCE_TEXT,
-    INSTANCE_TEXTURE,
-    MAX_COMMANDS
-} InstanceCommand;
+typedef enum DrawCommand {
+    DRAW_LINE,
+    DRAW_TRIANGLE,
+    DRAW_TRIANGLE_LINE,
+    DRAW_RECTANGLE,
+    DRAW_RECTANGLE_LINE,
+    DRAW_CIRCLE,
+    DRAW_CIRCLE_LINE,
+    DRAW_TEXT,
+    DRAW_TEXTURE,
+    MAX_DRAW_TYPES
+} DrawCommand;
 
-void DrawCommand(InstanceCommand command, Texture2D texture, Color color)
+static const char *drawTypeText[] = {
+    "DRAW_LINE",
+    "DRAW_TRIANGLE",
+    "DRAW_TRIANGLE_LINE",
+    "DRAW_RECTANGLE",
+    "DRAW_RECTANGLE_LINE",
+    "DRAW_CIRCLE",
+    "DRAW_CIRCLE_LINE",
+    "DRAW_TEXT",
+    "DRAW_TEXTURE",
+};
+
+void DrawCommand(int command, Texture2D texture, Color color)
 {
-    // Rectangle frameRec = { 0.0f, 0.0f, (float)texture.width / 6, (float)texture.height };
-
     switch (command)
     {
-        case INSTANCE_LINE:
+        case DRAW_LINE:
             DrawLine(0, 0, 50, 0, color);
             break;
-        case INSTANCE_TRIANGLE:
-            DrawTriangle((Vector2) { 0.0f, 0.0f }, (Vector2) { 50.0f, 0.0f }, (Vector2) { 0.0f, 50.0f }, color);
+        case DRAW_TRIANGLE:
+            DrawTriangle((Vector2) { 50.0f, 0.0f }, (Vector2) { 0.0f, 0.0f }, (Vector2) { 0.0f, 50.0f }, color);
             break;
-        case INSTANCE_TRIANGLE_LINE:
-            DrawTriangleLines((Vector2) { 0.0f, 0.0f }, (Vector2) { 50.0f, 0.0f }, (Vector2) { 0.0f, 50.0f }, color);
+        case DRAW_TRIANGLE_LINE:
+            DrawTriangleLines((Vector2) { 50.0f, 0.0f }, (Vector2) { 0.0f, 0.0f }, (Vector2) { 0.0f, 50.0f }, color);
             break;
-        case INSTANCE_RECTANGLE:
+        case DRAW_RECTANGLE:
             DrawRectangle(0, 0, 50, 50, color);
             break;
-        case INSTANCE_RECTANGLE_LINE:
-            // DrawRectangleLines(0, 0, 50, 50, color);
+        case DRAW_RECTANGLE_LINE:
             DrawRectangleLinesEx((Rectangle) { 0, 0, 50, 50 }, 3, color);
             break;
-        case INSTANCE_CIRCLE:
+        case DRAW_CIRCLE:
             DrawCircle(25, 25, 25, color);
             break;
-        case INSTANCE_CIRCLE_LINE:
+        case DRAW_CIRCLE_LINE:
             DrawCircleLines(25, 25, 25, color);
             break;
-        case INSTANCE_TEXT:
+        case DRAW_TEXT:
             DrawText("Text!", 0, 0, 20, color);
             break;
-        case INSTANCE_TEXTURE:
+        case DRAW_TEXTURE:
             DrawTexture(texture, 0, 0, WHITE);
-            // DrawTexturePro(texture, frameRec, (Rectangle) { 0, 0, 50, 50 }, Vector2Zero(), 0, WHITE);
             break;
         default:
             break;
@@ -80,15 +88,11 @@ int main(void)
     Texture2D texture = LoadTexture("resources/images/wabbit_alpha.png");
     Shader instanceShader = LoadShader("resources/shaders/test_instanced.vs", "resources/shaders/test_instanced.fs");
 
-    // Generate a large list of semi-random model transformation matrices
-    // ------------------------------------------------------------------
-    unsigned int instanceCount = 200;
-    Matrix* modelMatrices = (Matrix*)RL_CALLOC(instanceCount, sizeof(Matrix));
-
     // Configure instanced buffer
     // -------------------------
     RenderBatch batch = rlLoadRenderBatch(1, 8192);
-    batch.instances = 100;
+    batch.instances = 200;
+    unsigned int instanceCount = 200;
 
     bool drawInstanced = false;
 
@@ -99,11 +103,9 @@ int main(void)
     camera.rotation = 0.0f;
     camera.zoom = 1.0f;
 
-    int command = INSTANCE_LINE;
+    int command = DRAW_LINE;
 
     SetTargetFPS(60); // Set our game to run at 60 frames-per-second
-
-    glDisable(GL_CULL_FACE);
     //--------------------------------------------------------------------------------------
 
     // Main game loop
@@ -114,20 +116,23 @@ int main(void)
         if (IsKeyPressed(KEY_F2))
             drawInstanced = !drawInstanced;
 
+        // Adjust instance count
         if (IsKeyPressed(KEY_ONE))
             instanceCount -= 10;
         if (IsKeyPressed(KEY_TWO))
             instanceCount += 10;
+        batch.instances = instanceCount;
 
+        // Switch between draw commands
         if (IsKeyPressed(KEY_LEFT))
             command -= 1;
         if (IsKeyPressed(KEY_RIGHT))
             command += 1;
 
-        if (command < 0)
-            command = MAX_COMMANDS - 1;
-        if (command > MAX_COMMANDS - 1)
+        if (command >= MAX_DRAW_TYPES)
             command = 0;
+        if (command < 0)
+            command = MAX_DRAW_TYPES - 1;
 
         // Camera controls
         if (IsKeyDown(KEY_W))
@@ -168,14 +173,14 @@ int main(void)
 
         if (drawInstanced)
         {
-            batch.instances = instanceCount;
-            rlSetRenderBatchActive(&batch);
-
             BeginShaderMode(instanceShader);
-            DrawCommand(command, texture, BLUE);
-            EndShaderMode();
 
+            rlSetRenderBatchActive(&batch);
+            DrawCommand(command, texture, BLUE);
+            rlDrawRenderBatchActive();
             rlSetRenderBatchActive(NULL);
+
+            EndShaderMode();
         }
         else
         {
@@ -193,6 +198,8 @@ int main(void)
         DrawText(FormatText("instanceCount: %i", instanceCount), 120, 10, 20, GREEN);
         DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
 
+        DrawText(FormatText("%s", drawTypeText[command]), 10, GetScreenHeight() - 20, 14, BLACK);
+
         DrawFPS(10, 10);
 
         EndDrawing();
@@ -201,8 +208,6 @@ int main(void)
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
-    // Unload modelMatrices data array
-    RL_FREE(modelMatrices);
     UnloadShader(instanceShader);
     UnloadRenderTexture(target);
 

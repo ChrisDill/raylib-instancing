@@ -136,10 +136,12 @@ int main(void)
         if (drawInstanced)
         {
             BeginShaderMode(shader);
+
             rlSetRenderBatchActive(&batch);
             DrawTexture(texBunny, 0, 0, WHITE);
             rlDrawRenderBatchActive();
             rlSetRenderBatchActive(NULL);
+
             EndShaderMode();
         }
         else

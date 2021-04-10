@@ -2270,7 +2270,17 @@ void rlDrawRenderBatch(RenderBatch *batch)
                 // Bind current draw call texture, activated as GL_TEXTURE0 and binded to sampler2D texture0 by default
                 glBindTexture(GL_TEXTURE_2D, batch->draws[i].textureId);
 
-                if ((batch->draws[i].mode == RL_LINES) || (batch->draws[i].mode == RL_TRIANGLES)) glDrawArrays(batch->draws[i].mode, vertexOffset, batch->draws[i].vertexCount);
+                if ((batch->draws[i].mode == RL_LINES) || (batch->draws[i].mode == RL_TRIANGLES))
+                {
+                    if (batch->instances > 0)
+                    {
+                        glDrawArraysInstanced(batch->draws[i].mode, vertexOffset, batch->draws[i].vertexCount, batch->instances);
+                    }
+                    else
+                    {
+                        glDrawArrays(batch->draws[i].mode, vertexOffset, batch->draws[i].vertexCount);
+                    }
+                }
                 else
                 {
 #if defined(GRAPHICS_API_OPENGL_33)
