@@ -80,14 +80,16 @@ int main(void)
     {
         // Update
         //----------------------------------------------------------------------------------
+
+        // Turn instancing on/off
         if (IsKeyPressed(KEY_ONE))
             drawInstanced = false;
         if (IsKeyPressed(KEY_TWO))
             drawInstanced = true;
 
+        // Spawn bunnies
         if (IsMouseButtonDown(MOUSE_LEFT_BUTTON))
         {
-            // Create more bunnies
             for (int i = 0; i < 100; i++)
             {
                 if (bunniesCount < MAX_BUNNIES)

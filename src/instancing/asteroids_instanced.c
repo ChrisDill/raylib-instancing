@@ -134,14 +134,11 @@ int main(void)
             }
         }
 
+        // Turn instancing on/off
         if (IsKeyPressed(KEY_ONE))
-        {
             drawInstanced = false;
-        }
         if (IsKeyPressed(KEY_TWO))
-        {
             drawInstanced = true;
-        }
         //----------------------------------------------------------------------------------
 
         // Draw

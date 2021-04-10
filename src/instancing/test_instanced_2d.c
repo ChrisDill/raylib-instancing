@@ -11,7 +11,7 @@
 // Required for: malloc(), free()
 #include <stdlib.h>
 
-typedef enum DrawCommand {
+typedef enum DrawCommandType {
     DRAW_LINE,
     DRAW_TRIANGLE,
     DRAW_TRIANGLE_LINE,
@@ -22,7 +22,7 @@ typedef enum DrawCommand {
     DRAW_TEXT,
     DRAW_TEXTURE,
     MAX_DRAW_TYPES
-} DrawCommand;
+} DrawCommandType;
 
 static const char *drawTypeText[] = {
     "DRAW_LINE",
@@ -113,8 +113,20 @@ int main(void)
     {
         // Update
         //----------------------------------------------------------------------------------
-        if (IsKeyPressed(KEY_F2))
-            drawInstanced = !drawInstanced;
+        if (IsKeyDown(KEY_W))
+            camera.target.y -= (int)(300.0f * GetFrameTime());
+        if (IsKeyDown(KEY_S))
+            camera.target.y += (int)(300.0f * GetFrameTime());
+        if (IsKeyDown(KEY_A))
+            camera.target.x -= (int)(300.0f * GetFrameTime());
+        if (IsKeyDown(KEY_D))
+            camera.target.x += (int)(300.0f * GetFrameTime());
+
+        // Turn instancing on/off
+        if (IsKeyPressed(KEY_ONE))
+            drawInstanced = false;
+        if (IsKeyPressed(KEY_TWO))
+            drawInstanced = true;
 
         // Adjust instance count
         if (IsKeyPressed(KEY_ONE))
@@ -134,16 +146,6 @@ int main(void)
         if (command < 0)
             command = MAX_DRAW_TYPES - 1;
 
-        // Camera controls
-        if (IsKeyDown(KEY_W))
-            camera.target.y -= (int)(300.0f * GetFrameTime());
-        if (IsKeyDown(KEY_S))
-            camera.target.y += (int)(300.0f * GetFrameTime());
-        if (IsKeyDown(KEY_A))
-            camera.target.x -= (int)(300.0f * GetFrameTime());
-        if (IsKeyDown(KEY_D))
-            camera.target.x += (int)(300.0f * GetFrameTime());
-
         int wheelMove = GetMouseWheelMove();
         if (wheelMove != 0)
         {
@@ -157,16 +159,12 @@ int main(void)
             camera.offset = (Vector2) { 0, 50 };
             camera.rotation = 0.0f;
             camera.zoom = 1.0f;
-            instanceCount = 20;
         }
         //----------------------------------------------------------------------------------
 
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
-        ClearBackground(RAYWHITE);
-
-        BeginTextureMode(target);
         ClearBackground(RAYWHITE);
 
         BeginMode2D(camera);
@@ -189,16 +187,11 @@ int main(void)
 
         EndMode2D();
 
-        EndTextureMode();
-
-        // NOTE: Render texture must be y-flipped due to default OpenGL coordinates (left-bottom)
-        DrawTextureRec(target.texture, (Rectangle) { 0, 0, target.texture.width, -target.texture.height }, (Vector2) { 0, 0 }, WHITE);
-
         DrawRectangle(0, 0, screenWidth, 40, BLACK);
         DrawText(FormatText("instanceCount: %i", instanceCount), 120, 10, 20, GREEN);
         DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
 
-        DrawText(FormatText("%s", drawTypeText[command]), 10, GetScreenHeight() - 20, 14, BLACK);
+        DrawText(FormatText("%s", drawTypeText[command]), 10, GetScreenHeight() - 20, 14, MAROON);
 
         DrawFPS(10, 10);
 

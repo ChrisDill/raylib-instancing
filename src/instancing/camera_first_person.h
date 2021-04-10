@@ -5,7 +5,7 @@
 #include "raymath.h"
 
 // Camera constants
-const float MovementSpeed = 20.5f;
+const float MovementSpeed = 30.0f;
 const float MouseSensitivity = 15.0f;
 
 typedef struct CameraFP  {

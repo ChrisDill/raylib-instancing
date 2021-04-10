@@ -8,48 +8,59 @@
 #include "raylib.h"
 #include "raylib/src/rlgl.h"
 #include "camera_first_person.h"
-
 // Required for: malloc(), free()
 #include <stdlib.h>
 
-typedef enum InstanceCommand {
-    INSTANCE_LINE,
-    INSTANCE_TRIANGLE,
-    INSTANCE_RECTANGLE,
-    INSTANCE_CIRCLE,
-    INSTANCE_TEXT,
-    INSTANCE_CUBE,
-    INSTANCE_SPHERE,
-    INSTANCE_MODEL,
-    MAX_COMMANDS
-} InstanceCommand;
+typedef enum DrawCommandType {
+    DRAW_LINE,
+    DRAW_TRIANGLE,
+    DRAW_RECTANGLE,
+    DRAW_CIRCLE,
+    DRAW_TEXT,
+    DRAW_CUBE,
+    DRAW_SPHERE,
+    DRAW_MODEL,
+    MAX_DRAW_TYPES
+} DrawCommandType;
 
-void DrawCommand(InstanceCommand command, Model model, Color color)
+static const char *drawTypeText[] = {
+    "DRAW_LINE",
+    "DRAW_TRIANGLE",
+    "DRAW_RECTANGLE",
+    "DRAW_CIRCLE",
+    "DRAW_TEXT",
+    "DRAW_CUBE",
+    "DRAW_SPHERE",
+    "DRAW_MODEL",
+    "MAX_DRAW_TYPES"
+};
+
+void DrawCommand(int command, Model model, Color color)
 {
     switch (command)
     {
-        case INSTANCE_LINE:
+        case DRAW_LINE:
             DrawLine(0, 0, 100, 0, color);
             break;
-        case INSTANCE_TRIANGLE:
+        case DRAW_TRIANGLE:
             DrawTriangle((Vector2) { 0.0f, 0.0f }, (Vector2) { 100.0f, 0.0f }, (Vector2) { 0.0f, 100.0f }, color);
             break;
-        case INSTANCE_RECTANGLE:
+        case DRAW_RECTANGLE:
             DrawRectangle(0, 0, 100, 100, color);
             break;
-        case INSTANCE_CIRCLE:
+        case DRAW_CIRCLE:
             DrawCircleLines(0, 0, 30, color);
             break;
-        case INSTANCE_TEXT:
+        case DRAW_TEXT:
             DrawText("Hello World!", 0, 0, 20, color);
             break;
-        case INSTANCE_CUBE:
+        case DRAW_CUBE:
             DrawCube((Vector3) { 0.0f, 0.0f }, 10.0f, 10.0f, 10.0f, color);
             break;
-        case INSTANCE_SPHERE:
+        case DRAW_SPHERE:
             break;
-        case INSTANCE_MODEL:
-            DrawModel(model, Vector3Zero(), 5.0f, color);
+        case DRAW_MODEL:
+            DrawModel(model, Vector3Zero(), 5.0f, WHITE);
             break;
         default:
             break;
@@ -66,6 +77,7 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "raylib [others] example - 3d instancing testbed");
 
     Shader instancedShader = LoadShader("resources/shaders/test_instanced.vs", "resources/shaders/test_instanced.fs");
+
     Model model = LoadModel("resources/objects/nanosuit/nanosuit.obj");
     model.materials[0].shader = instancedShader;
 
@@ -81,7 +93,7 @@ int main(void)
 
     bool drawInstanced = true;
     bool paused = false;
-    int command = INSTANCE_TRIANGLE;
+    int command = DRAW_TRIANGLE;
 
     // Define the camera to look into our 3d world
     CameraFP camera = LoadCameraFP((Vector3) { 0.0f, 14.0f, 240.0f });
@@ -105,7 +117,6 @@ int main(void)
         //----------------------------------------------------------------------------------
         if (!paused)
         {
-            // Mouse movement
             mousePosition = GetMousePosition();
             Vector2 mouseDelta = Vector2Subtract(mousePosition, mouseLastPosition);
             mouseLastPosition = mousePosition;
@@ -116,47 +127,34 @@ int main(void)
             }
         }
 
+        // Turn instancing on/off
         if (IsKeyPressed(KEY_ONE))
-        {
             drawInstanced = false;
-        }
         if (IsKeyPressed(KEY_TWO))
-        {
             drawInstanced = true;
-        }
 
+        // Adjust instance count
         if (IsKeyPressed(KEY_W))
-        {
             instanceCount += 1;
-        }
         if (IsKeyPressed(KEY_S))
-        {
             instanceCount -= 1;
-        }
 
+        // Set draw command
         if (IsKeyPressed(KEY_LEFT))
-        {
             command -= 1;
-        }
         if (IsKeyPressed(KEY_RIGHT))
-        {
             command += 1;
-        }
 
         if (command < 0)
-        {
-            command = MAX_COMMANDS - 1;
-        }
-        if (command > MAX_COMMANDS - 1)
-        {
+            command = MAX_DRAW_TYPES - 1;
+        if (command > MAX_DRAW_TYPES - 1)
             command = 0;
-        }
         //----------------------------------------------------------------------------------
 
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
-        ClearBackground(BLACK);
+        ClearBackground(RAYWHITE);
 
         BeginMode3D(camera.view);
 
@@ -168,14 +166,14 @@ int main(void)
             rlSetRenderBatchActive(&batch);
 
             BeginShaderMode(instancedShader);
-            DrawCommand(command, model, WHITE);
+            DrawCommand(command, model, BLUE);
             EndShaderMode();
 
             rlSetRenderBatchActive(&batch);
         }
         else
         {
-            DrawCommand(command, model, WHITE);
+            DrawCommand(command, model, BLUE);
         }
 
         EndMode3D();
@@ -183,6 +181,8 @@ int main(void)
         DrawRectangle(0, 0, screenWidth, 40, BLACK);
         DrawText(FormatText("models: %i", instanceCount), 120, 10, 20, GREEN);
         DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
+
+        DrawText(FormatText("%s", drawTypeText[command]), 10, GetScreenHeight() - 20, 14, MAROON);
 
         DrawFPS(10, 10);
 
