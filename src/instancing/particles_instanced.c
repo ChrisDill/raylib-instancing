@@ -6,7 +6,7 @@
 
 #include "glad.h"
 #include "raylib.h"
-#include "raylib/src/rlgl.h"
+#include "rlgl.h"
 
 // Required for: malloc(), free()
 #include <stdlib.h>

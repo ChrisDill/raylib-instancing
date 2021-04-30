@@ -6,8 +6,9 @@
 
 #include "glad.h"
 #include "raylib.h"
-#include "raylib/src/rlgl.h"
+#include "rlgl.h"
 #include "camera_first_person.h"
+
 // Required for: malloc(), free()
 #include <stdlib.h>
 
@@ -93,11 +94,11 @@ int main(void)
 
     bool drawInstanced = true;
     bool paused = false;
-    int command = DRAW_TRIANGLE;
+    int command = DRAW_LINE;
 
     // Define the camera to look into our 3d world
     CameraFP camera = LoadCameraFP((Vector3) { 0.0f, 14.0f, 240.0f });
-    camera.view.position = (Vector3) { 0.0f, 30.0f, 100.0f };
+    camera.view.position = (Vector3) { 0.0f, 30.0f, 200.0f };
 
     Vector2 mousePosition = GetMousePosition();
     Vector2 mouseLastPosition = mousePosition;
@@ -179,7 +180,7 @@ int main(void)
         EndMode3D();
 
         DrawRectangle(0, 0, screenWidth, 40, BLACK);
-        DrawText(FormatText("models: %i", instanceCount), 120, 10, 20, GREEN);
+        DrawText(FormatText("instanceCount: %i", instanceCount), 120, 10, 20, GREEN);
         DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
 
         DrawText(FormatText("%s", drawTypeText[command]), 10, GetScreenHeight() - 20, 14, MAROON);

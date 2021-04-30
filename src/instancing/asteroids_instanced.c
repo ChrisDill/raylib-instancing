@@ -11,6 +11,7 @@
 #include "raymath.h"
 #include "rlgl.h"
 #include "camera_first_person.h"
+
 // Required for: calloc(), free()
 #include <stdlib.h>
 
