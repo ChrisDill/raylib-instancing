@@ -4,12 +4,14 @@
 *
 ********************************************************************************************/
 
-#include "glad.h"
 #include "raylib.h"
 #include "rlgl.h"
 
 // Required for: malloc(), free()
 #include <stdlib.h>
+
+// Required for: offsetof()
+#include <stddef.h>
 
 #define MAX_PARTICLES 100000
 
@@ -52,12 +54,12 @@ int main(void)
 
     // instanced particle positions(2 x float = 2 x GL_FLOAT)
     rlEnableVertexAttribute(positionAttrib);
-    rlSetVertexAttribute(positionAttrib, 2, GL_FLOAT, GL_FALSE, sizeof(Particle), (void*)0);
+    rlSetVertexAttribute(positionAttrib, 2, RL_FLOAT, false, sizeof(Particle), (void*)0);
     rlSetVertexAttributeDivisor(positionAttrib, 1);
 
     // instanced bunny colors(4 x unsigned char = 4 x GL_UNSIGNED_BYTE)
     rlEnableVertexAttribute(colorAttrib);
-    rlSetVertexAttribute(colorAttrib, 4, GL_UNSIGNED_BYTE, GL_TRUE, sizeof(Particle), (void*)offsetof(Particle, color));
+    rlSetVertexAttribute(colorAttrib, 4, RL_UNSIGNED_BYTE, true, sizeof(Particle), (void*)offsetof(Particle, color));
     rlSetVertexAttributeDivisor(colorAttrib, 1);
 
     rlDisableVertexArray();
@@ -111,19 +113,15 @@ int main(void)
             particles[i].lifetime -= dt;
         }
 
-        // @TODO look into moving movement into shader code.
         // Re-upload particles array every frame to apply movement
-        glBindBuffer(GL_ARRAY_BUFFER, buffer);
-        glBufferData(GL_ARRAY_BUFFER, particleCount * sizeof(Particle), &particles[0], GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        // rlUpdateVertexBuffer(buffer, &bunnies[0], bunniesCount * sizeof(Bunny), 0);
-        // glBindBuffer(GL_ARRAY_BUFFER, 0);
+        batch.instances = particleCount;
+        rlUpdateVertexBuffer(buffer, particles, particleCount * sizeof(Particle), 0);
         //----------------------------------------------------------------------------------
 
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
-        ClearBackground(BLACK);
+        ClearBackground(RAYWHITE);
 
         if (drawInstanced)
         {
@@ -148,8 +146,6 @@ int main(void)
             }
         }
 
-        EndMode3D();
-
         DrawRectangle(0, 0, screenWidth, 40, BLACK);
         DrawText(FormatText("particles: %i", particleCount), 120, 10, 20, GREEN);
         DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
@@ -162,8 +158,10 @@ int main(void)
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
-    RL_FREE(particles); // Unload modelMatrices data array
+    RL_FREE(particles); // Unload particles data array
 
+    rlUnloadVertexBuffer(buffer);
+    rlUnloadRenderBatch(batch);
     UnloadShader(shader);
 
     CloseWindow(); // Close window and Openrl context

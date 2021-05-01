@@ -4,7 +4,6 @@
 *
 ********************************************************************************************/
 
-#include "glad.h"
 #include "raylib.h"
 #include "rlgl.h"
 #include "camera_first_person.h"
@@ -105,10 +104,6 @@ int main(void)
 
     SetTargetFPS(60); // Set our game to run at 60 frames-per-second
     DisableCursor();
-
-    glEnable(GL_CULL_FACE_MODE);
-    glCullFace(GL_BACK);
-    glEnable(GL_DEPTH_TEST);
     //--------------------------------------------------------------------------------------
 
     // Main game loop
