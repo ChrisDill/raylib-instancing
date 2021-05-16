@@ -88,7 +88,7 @@ int main(void)
     SetTextureFilter(target.texture, FILTER_BILINEAR);
 
     Texture2D texture = LoadTexture("resources/images/wabbit_alpha.png");
-    Shader instanceShader = LoadShader("resources/shaders/test_instanced.vs", "resources/shaders/test_instanced.fs");
+    Shader instanceShader = LoadShader("resources/shaders/test_instanced.vs", NULL);
 
     // Configure instanced buffer
     // -------------------------

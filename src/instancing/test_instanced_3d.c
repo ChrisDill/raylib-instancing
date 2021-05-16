@@ -77,7 +77,7 @@ int main(void)
 
     InitWindow(screenWidth, screenHeight, "raylib [others] example - 3d instancing testbed");
 
-    Shader instancedShader = LoadShader("resources/shaders/test_instanced_3d.vs", "resources/shaders/test_instanced.fs");
+    Shader instancedShader = LoadShader("resources/shaders/test_instanced_3d.vs", NULL);
 
     // Configure instanced buffer
     // -------------------------
