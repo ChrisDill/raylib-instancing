@@ -8,7 +8,7 @@
 const float MovementSpeed = 30.0f;
 const float MouseSensitivity = 15.0f;
 
-typedef struct CameraFP  {
+typedef struct CameraFP {
     Camera3D view;
     float currentSpeed;
     Vector3 front;

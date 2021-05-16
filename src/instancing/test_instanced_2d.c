@@ -35,36 +35,39 @@ static const char *drawTypeText[] = {
     "DRAW_TEXTURE",
 };
 
-void DrawCommand(int command, Texture2D texture, Color color)
+void DrawCommand(int command, Vector2 position, Texture2D texture, Color color)
 {
+    int x = position.x;
+    int y = position.y;
+
     switch (command)
     {
         case DRAW_LINE:
-            DrawLine(0, 0, 50, 0, color);
+            DrawLine(x, y, x + 50, y + 0, color);
             break;
         case DRAW_TRIANGLE:
-            DrawTriangle((Vector2) { 50.0f, 0.0f }, (Vector2) { 0.0f, 0.0f }, (Vector2) { 0.0f, 50.0f }, color);
+            DrawTriangle((Vector2) { x + 50.0f, y }, (Vector2) { x, y }, (Vector2) { x, y + 50.0f }, color);
             break;
         case DRAW_TRIANGLE_LINE:
-            DrawTriangleLines((Vector2) { 50.0f, 0.0f }, (Vector2) { 0.0f, 0.0f }, (Vector2) { 0.0f, 50.0f }, color);
+            DrawTriangleLines((Vector2) { x + 50.0f, y }, (Vector2) { x, y }, (Vector2) { x, y + 50.0f }, color);
             break;
         case DRAW_RECTANGLE:
-            DrawRectangle(0, 0, 50, 50, color);
+            DrawRectangle(x, y, 50, 50, color);
             break;
         case DRAW_RECTANGLE_LINE:
-            DrawRectangleLinesEx((Rectangle) { 0, 0, 50, 50 }, 3, color);
+            DrawRectangleLinesEx((Rectangle) { x, y, 50, 50 }, 3, color);
             break;
         case DRAW_CIRCLE:
-            DrawCircle(25, 25, 25, color);
+            DrawCircle(x + 25, y + 25, 25, color);
             break;
         case DRAW_CIRCLE_LINE:
-            DrawCircleLines(25, 25, 25, color);
+            DrawCircleLines(x + 25, y + 25, 25, color);
             break;
         case DRAW_TEXT:
-            DrawText("Text!", 0, 0, 20, color);
+            DrawText("Text!", x, y, 20, color);
             break;
         case DRAW_TEXTURE:
-            DrawTexture(texture, 0, 0, WHITE);
+            DrawTexture(texture, x, y, WHITE);
             break;
         default:
             break;
@@ -78,7 +81,7 @@ int main(void)
     const int screenWidth = 800;
     const int screenHeight = 450;
 
-    SetConfigFlags(FLAG_MSAA_4X_HINT);
+    SetConfigFlags(FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
     InitWindow(screenWidth, screenHeight, "raylib [others] example - 2d instancing testbed");
 
     RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
@@ -90,8 +93,7 @@ int main(void)
     // Configure instanced buffer
     // -------------------------
     RenderBatch batch = rlLoadRenderBatch(1, 8192);
-    batch.instances = 200;
-    unsigned int instanceCount = 200;
+    batch.instances = 300;
 
     bool drawInstanced = false;
 
@@ -112,27 +114,21 @@ int main(void)
     {
         // Update
         //----------------------------------------------------------------------------------
+        float dt = GetFrameTime();
         if (IsKeyDown(KEY_W))
-            camera.target.y -= (int)(300.0f * GetFrameTime());
+            camera.target.y -= (int)(300.0f * dt);
         if (IsKeyDown(KEY_S))
-            camera.target.y += (int)(300.0f * GetFrameTime());
+            camera.target.y += (int)(300.0f * dt);
         if (IsKeyDown(KEY_A))
-            camera.target.x -= (int)(300.0f * GetFrameTime());
+            camera.target.x -= (int)(300.0f * dt);
         if (IsKeyDown(KEY_D))
-            camera.target.x += (int)(300.0f * GetFrameTime());
+            camera.target.x += (int)(300.0f * dt);
 
         // Turn instancing on/off
         if (IsKeyPressed(KEY_ONE))
             drawInstanced = false;
         if (IsKeyPressed(KEY_TWO))
             drawInstanced = true;
-
-        // Adjust instance count
-        if (IsKeyPressed(KEY_ONE))
-            instanceCount -= 10;
-        if (IsKeyPressed(KEY_TWO))
-            instanceCount += 10;
-        batch.instances = instanceCount;
 
         // Switch between draw commands
         if (IsKeyPressed(KEY_LEFT))
@@ -173,7 +169,7 @@ int main(void)
             BeginShaderMode(instanceShader);
 
             rlSetRenderBatchActive(&batch);
-            DrawCommand(command, texture, BLUE);
+            DrawCommand(command, Vector2Zero(), texture, BLUE);
             rlDrawRenderBatchActive();
             rlSetRenderBatchActive(NULL);
 
@@ -181,13 +177,22 @@ int main(void)
         }
         else
         {
-            DrawCommand(command, texture, BLUE);
+            int width = 30;
+            for (int i = 0; i < batch.instances; i++)
+            {
+                // % is the "modulo operator", the remainder of i / width;
+                // where "/" is an integer division
+                Vector2 position = { i % width, i / width };
+                position.x += position.x * 50.0f;
+                position.y += position.y * 50.0f;
+                DrawCommand(command, position, texture, BLUE);
+            }
         }
 
         EndMode2D();
 
         DrawRectangle(0, 0, screenWidth, 40, BLACK);
-        DrawText(FormatText("instanceCount: %i", instanceCount), 120, 10, 20, GREEN);
+        DrawText(FormatText("instanceCount: %i", batch.instances), 120, 10, 20, GREEN);
         DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
 
         DrawText(FormatText("%s", drawTypeText[command]), 10, GetScreenHeight() - 20, 14, MAROON);

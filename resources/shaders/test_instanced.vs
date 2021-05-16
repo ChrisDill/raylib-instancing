@@ -22,14 +22,12 @@ void main()
     // Calculate final vertex position
     vec3 position = vertexPosition;
 
-    int width = 20;
+    int width = 30;
     int x = gl_InstanceID % width;    // % is the "modulo operator", the remainder of i / width;
     int y = gl_InstanceID / width;    // where "/" is an integer division
 
-    position.x += x * 80.0f;
-    position.y += y * 80.0f;
-
-    // position.x += gl_InstanceID * 100.0f;
+    position.x += x * 50.0f;
+    position.y += y * 50.0f;
 
     gl_Position = mvp * vec4(position, 1.0);
 }
