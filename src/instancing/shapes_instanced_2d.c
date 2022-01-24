@@ -5,6 +5,7 @@
 ********************************************************************************************/
 
 #include "raylib.h"
+#include "raymath.h"
 #include "rlgl.h"
 
 // Required for: malloc(), free()
@@ -85,14 +86,14 @@ int main(void)
     InitWindow(screenWidth, screenHeight, "raylib [others] example - 2d instancing testbed");
 
     RenderTexture2D target = LoadRenderTexture(screenWidth, screenHeight);
-    SetTextureFilter(target.texture, FILTER_BILINEAR);
+    SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
 
     Texture2D texture = LoadTexture("resources/images/wabbit_alpha.png");
-    Shader instanceShader = LoadShader("resources/shaders/test_instanced.vs", NULL);
+    Shader instanceShader = LoadShader("resources/shaders/shapes_instanced_2d.vs", NULL);
 
     // Configure instanced buffer
     // -------------------------
-    RenderBatch batch = rlLoadRenderBatch(1, 8192);
+    rlRenderBatch batch = rlLoadRenderBatch(1, 36);
     batch.instances = 300;
 
     bool drawInstanced = false;
@@ -192,10 +193,10 @@ int main(void)
         EndMode2D();
 
         DrawRectangle(0, 0, screenWidth, 40, BLACK);
-        DrawText(FormatText("instanceCount: %i", batch.instances), 120, 10, 20, GREEN);
-        DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
+        DrawText(TextFormat("instanceCount: %i", batch.instances), 120, 10, 20, GREEN);
+        DrawText(TextFormat("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
 
-        DrawText(FormatText("%s", drawTypeText[command]), 10, GetScreenHeight() - 20, 14, MAROON);
+        DrawText(TextFormat("%s", drawTypeText[command]), 10, GetScreenHeight() - 20, 14, MAROON);
 
         DrawFPS(10, 10);
 

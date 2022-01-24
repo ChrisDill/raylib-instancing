@@ -18,5 +18,5 @@ cc -o build/asteroids_instanced src/instancing/asteroids_instanced.c $FLAGS $INC
 cc -o build/particles_instanced src/instancing/particles_instanced.c $FLAGS $INCLUDES $LIBRARIES
 cc -o build/textures_bunnymark_instanced src/instancing/textures_bunnymark_instanced.c $FLAGS $INCLUDES $LIBRARIES
 cc -o build/quads_instanced src/instancing/quads_instanced.c $FLAGS $INCLUDES $LIBRARIES
-cc -o build/test_instanced_2d src/instancing/test_instanced_2d.c $FLAGS $INCLUDES $LIBRARIES
-cc -o build/test_instanced_3d src/instancing/test_instanced_3d.c $FLAGS $INCLUDES $LIBRARIES
+cc -o build/shapes_instanced_2d src/instancing/shapes_instanced_2d.c $FLAGS $INCLUDES $LIBRARIES
+cc -o build/shapes_instanced_3d src/instancing/shapes_instanced_3d.c $FLAGS $INCLUDES $LIBRARIES

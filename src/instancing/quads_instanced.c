@@ -8,6 +8,7 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
+#include <stddef.h>
 
 // Get the viewport rectangle from the current opengl context.
 Rectangle GetViewport()
@@ -76,7 +77,7 @@ int main(void)
 
     // Configure instanced buffer
     // -------------------------
-    RenderBatch batch = rlLoadRenderBatch(1, 8192);
+    rlRenderBatch batch = rlLoadRenderBatch(1, 1);
     batch.instances = 100;
 
     int loc = GetShaderLocation(shader, "offsets");
@@ -148,7 +149,7 @@ int main(void)
         }
 
         DrawRectangle(0, 0, screenWidth, 40, BLACK);
-        DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
+        DrawText(TextFormat("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
 
         DrawFPS(10, 10);
 

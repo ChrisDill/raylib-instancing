@@ -2,7 +2,7 @@
 
 Experimenting with instanced rendering support for raylib.
 
-Currently includes the raylib src as modifications to [rlgl.h](src/raylib/src/rlgl.h) are required for instancing support.
+Currently uses a patch file for [rlgl](src/rlgl.patch) to add instancing support.
 
 ## Examples
 

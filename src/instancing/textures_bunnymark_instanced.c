@@ -7,6 +7,7 @@
 ********************************************************************************************/
 
 #include "raylib.h"
+#include "raymath.h"
 #include "rlgl.h"
 
 // Required for: malloc(), free()
@@ -23,7 +24,6 @@
 
 // This is the maximum amount of elements (quads) per batch
 // NOTE: This value is defined in [rlgl] module and can be changed there
-#define MAX_BATCH_ELEMENTS 8192
 
 typedef struct Bunny {
     Vector2 position;
@@ -52,7 +52,7 @@ int main(void)
 
     // Configure instanced buffer
     // -------------------------
-    RenderBatch batch = rlLoadRenderBatch(1, 8192);
+    rlRenderBatch batch = rlLoadRenderBatch(1, 1);
     batch.instances = bunniesCount;
 
     rlEnableVertexArray(batch.vertexBuffer[0].vaoId);
@@ -77,6 +77,9 @@ int main(void)
 
     bool drawInstanced = false;
 
+    Vector2 mousePosition = GetMousePosition();
+    Vector2 origin = { texBunny.width / 2, texBunny.height / 2 };
+
     SetTargetFPS(60); // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
@@ -95,11 +98,12 @@ int main(void)
         // Spawn bunnies
         if (IsMouseButtonDown(MOUSE_LEFT_BUTTON))
         {
+            mousePosition = GetMousePosition();
             for (int i = 0; i < 100; i++)
             {
                 if (bunniesCount < bufferLength)
                 {
-                    bunnies[bunniesCount].position = GetMousePosition();
+                    bunnies[bunniesCount].position = Vector2Subtract(mousePosition, origin);
                     bunnies[bunniesCount].speed.x = (float)GetRandomValue(-250, 250) / 60.0f;
                     bunnies[bunniesCount].speed.y = (float)GetRandomValue(-250, 250) / 60.0f;
                     bunnies[bunniesCount].color = (Color) {
@@ -162,13 +166,13 @@ int main(void)
         }
 
         DrawRectangle(0, 0, GetScreenWidth(), 40, BLACK);
-        DrawText(FormatText("bunnies: %i", bunniesCount), 120, 10, 20, GREEN);
+        DrawText(TextFormat("bunnies: %i", bunniesCount), 120, 10, 20, GREEN);
 
         if (!drawInstanced)
         {
-            DrawText(FormatText("batched draw calls: %i", 1 + bunniesCount / MAX_BATCH_ELEMENTS), 300, 10, 20, MAROON);
+            DrawText(TextFormat("batched draw calls: %i", 1 + bunniesCount / RL_DEFAULT_BATCH_BUFFER_ELEMENTS), 300, 10, 20, MAROON);
         }
-        DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
+        DrawText(TextFormat("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
 
         DrawFPS(10, 10);
 

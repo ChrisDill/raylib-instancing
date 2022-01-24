@@ -77,11 +77,11 @@ int main(void)
 
     InitWindow(screenWidth, screenHeight, "raylib [others] example - 3d instancing testbed");
 
-    Shader instancedShader = LoadShader("resources/shaders/test_instanced_3d.vs", NULL);
+    Shader instancedShader = LoadShader("resources/shaders/shapes_instanced_3d.vs", NULL);
 
     // Configure instanced buffer
     // -------------------------
-    RenderBatch batch = rlLoadRenderBatch(1, 8192);
+    rlRenderBatch batch = rlLoadRenderBatch(1, 512);
     batch.instances = 300;
 
     bool drawInstanced = true;
@@ -158,10 +158,10 @@ int main(void)
         EndMode3D();
 
         DrawRectangle(0, 0, screenWidth, 40, BLACK);
-        DrawText(FormatText("instanceCount: %i", batch.instances), 120, 10, 20, GREEN);
-        DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
+        DrawText(TextFormat("instanceCount: %i", batch.instances), 120, 10, 20, GREEN);
+        DrawText(TextFormat("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
 
-        DrawText(FormatText("%s", drawTypeText[command]), 10, GetScreenHeight() - 20, 14, MAROON);
+        DrawText(TextFormat("%s", drawTypeText[command]), 10, GetScreenHeight() - 20, 14, MAROON);
 
         DrawFPS(10, 10);
 

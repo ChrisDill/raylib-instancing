@@ -22,6 +22,7 @@ int main(void)
     const int screenWidth = 800;
     const int screenHeight = 450;
 
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(screenWidth, screenHeight, "raylib [models] example - asteroids instanced");
 
     Shader rockShader = LoadShader("resources/shaders/asteroids_instanced.vs", "resources/shaders/asteroids_instanced.fs");
@@ -167,7 +168,7 @@ int main(void)
         // Draw each asteroid one at a time
         else
         {
-            rock.materials[0].shader = rlGetShaderDefault();
+            rock.materials[0].shader.id = rlGetShaderIdDefault();
             for (int i = 0; i < asteroidCount; i++)
             {
                 rock.transform = modelMatrices[i];
@@ -180,8 +181,8 @@ int main(void)
         EndMode3D();
 
         DrawRectangle(0, 0, screenWidth, 40, BLACK);
-        DrawText(FormatText("asteroids: %i", asteroidCount), 120, 10, 20, GREEN);
-        DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
+        DrawText(TextFormat("asteroids: %i", asteroidCount), 120, 10, 20, GREEN);
+        DrawText(TextFormat("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
 
         DrawFPS(10, 10);
 
