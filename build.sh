@@ -2,7 +2,7 @@
 RAYLIB_DIR=src/raylib
 FLAGS="-g -Wall -Werror -Wno-missing-braces"
 INCLUDES="-I./src -I$RAYLIB_DIR/src -I$RAYLIB_DIR/src/external"
-LIBRARIES="./src/raylib/libraylib.a -L$RAYLIB_DIR/src -lGL -lm -lpthread -ldl -lrt -lX11"
+LIBRARIES="./src/raylib/src/libraylib.a -L$RAYLIB_DIR/src -lGL -lm -lpthread -ldl -lrt -lX11"
 
 mkdir -p build
 
@@ -10,6 +10,7 @@ mkdir -p build
 find build -type f -executable -delete
 
 # Build custom raylib
+patch -u src/raylib/src/rlgl.h -i src/rlgl.patch
 make -C $RAYLIB_DIR/src
 
 # Build instancing examples
