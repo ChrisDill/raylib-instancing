@@ -1,0 +1,52 @@
+--- raylib/src/rlgl.h	2022-01-20 22:30:17.158271155 +0000
++++ raylib2/src/rlgl.h	2021-12-06 10:23:36.607740666 +0000
+@@ -356,6 +356,7 @@
+     rlDrawCall *draws;          // Draw calls array, depends on textureId
+     int drawCounter;            // Draw calls counter
+     float currentDepth;         // Current depth value for next draw
++    int instances;
+ } rlRenderBatch;
+ 
+ #if defined(__STDC__) && __STDC_VERSION__ >= 199901L
+@@ -2565,18 +2566,35 @@
+                 // Bind current draw call texture, activated as GL_TEXTURE0 and binded to sampler2D texture0 by default
+                 glBindTexture(GL_TEXTURE_2D, batch->draws[i].textureId);
+ 
+-                if ((batch->draws[i].mode == RL_LINES) || (batch->draws[i].mode == RL_TRIANGLES)) glDrawArrays(batch->draws[i].mode, vertexOffset, batch->draws[i].vertexCount);
++                if ((batch->draws[i].mode == RL_LINES) || (batch->draws[i].mode == RL_TRIANGLES))
++                {
++                    if (batch->instances == 0)
++                    {
++                        glDrawArrays(batch->draws[i].mode, vertexOffset, batch->draws[i].vertexCount);
++                    }
++                    else
++                    {
++                        glDrawArraysInstanced(batch->draws[i].mode, vertexOffset, batch->draws[i].vertexCount, batch->instances);
++                    }
++                }
+                 else
+                 {
++                    if (batch->instances == 0)
++                    {
+ #if defined(GRAPHICS_API_OPENGL_33)
+-                    // We need to define the number of indices to be processed: elementCount*6
+-                    // NOTE: The final parameter tells the GPU the offset in bytes from the
+-                    // start of the index buffer to the location of the first index to process
+-                    glDrawElements(GL_TRIANGLES, batch->draws[i].vertexCount/4*6, GL_UNSIGNED_INT, (GLvoid *)(vertexOffset/4*6*sizeof(GLuint)));
++                        // We need to define the number of indices to be processed: elementCount*6
++                        // NOTE: The final parameter tells the GPU the offset in bytes from the
++                        // start of the index buffer to the location of the first index to process
++                        glDrawElements(GL_TRIANGLES, batch->draws[i].vertexCount/4*6, GL_UNSIGNED_INT, (GLvoid *)(vertexOffset/4*6*sizeof(GLuint)));
+ #endif
+ #if defined(GRAPHICS_API_OPENGL_ES2)
+-                    glDrawElements(GL_TRIANGLES, batch->draws[i].vertexCount/4*6, GL_UNSIGNED_SHORT, (GLvoid *)(vertexOffset/4*6*sizeof(GLushort)));
++                        glDrawElements(GL_TRIANGLES, batch->draws[i].vertexCount/4*6, GL_UNSIGNED_SHORT, (GLvoid *)(vertexOffset/4*6*sizeof(GLushort)));
+ #endif
++                    }
++                    else
++                    {
++                        glDrawElementsInstanced(GL_TRIANGLES, batch->draws[i].vertexCount/4*6, GL_UNSIGNED_INT, (GLvoid *)(vertexOffset/4*6*sizeof(GLuint)), batch->instances);
++                    }
+                 }
+ 
+                 vertexOffset += (batch->draws[i].vertexCount + batch->draws[i].vertexAlignment);
