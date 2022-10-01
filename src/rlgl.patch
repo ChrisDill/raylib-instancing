@@ -1,5 +1,4 @@
 --- raylib/src/rlgl.h	2022-01-20 22:30:17.158271155 +0000
-+++ raylib2/src/rlgl.h	2021-12-06 10:23:36.607740666 +0000
 @@ -356,6 +356,7 @@
      rlDrawCall *draws;          // Draw calls array, depends on textureId
      int drawCounter;            // Draw calls counter
