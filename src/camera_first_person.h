@@ -42,8 +42,6 @@ CameraFP LoadCameraFP()
         .projection = CAMERA_PERSPECTIVE
     };
 
-    SetCameraMode(camera.view, CAMERA_CUSTOM);
-
     return camera;
 }
 

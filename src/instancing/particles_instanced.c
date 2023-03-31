@@ -42,7 +42,7 @@ int main(void)
 
     // Configure instanced array
     //--------------------------------------------------------------------------------------
-    RenderBatch batch = rlLoadRenderBatch(1, 8192);
+    rlRenderBatch batch = rlLoadRenderBatch(1, 8192);
     batch.instances = 100;
 
     rlEnableVertexArray(batch.vertexBuffer[0].vaoId);
@@ -147,8 +147,8 @@ int main(void)
         }
 
         DrawRectangle(0, 0, screenWidth, 40, BLACK);
-        DrawText(FormatText("particles: %i", particleCount), 120, 10, 20, GREEN);
-        DrawText(FormatText("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
+        DrawText(TextFormat("particles: %i", particleCount), 120, 10, 20, GREEN);
+        DrawText(TextFormat("instanced: %i", drawInstanced), 550, 10, 20, MAROON);
 
         DrawFPS(10, 10);
 
